@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Env (ne pas commiter les secrets)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
