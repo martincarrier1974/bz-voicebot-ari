@@ -1,0 +1,3 @@
+# Railway : commande de démarrage (optionnel, package.json "start" suffit)
+[deploy]
+startCommand = "npm start"
