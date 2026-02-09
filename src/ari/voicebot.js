@@ -57,7 +57,7 @@ export async function startVoicebot() {
 
       } catch (e) {
         log.error({ err: e, chanId }, "Error in call handling");
-        try { await channel.hangup(); } catch {}
+        try { await channel.hangup(); } catch { /* ignore hangup errors */ }
       }
     });
 

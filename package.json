@@ -4,6 +4,7 @@
   "description": "Voicebot Asterisk ARI + ExternalMedia + M365",
   "type": "module",
   "scripts": {
+    "build": "npm run lint",
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "lint": "eslint .",
@@ -19,7 +20,9 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "eslint": "^10.0.0",
+    "globals": "^17.3.0",
     "prettier": "^3.8.1"
   }
 }
