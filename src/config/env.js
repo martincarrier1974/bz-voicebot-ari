@@ -10,9 +10,15 @@ const schema = z.object({
   RTP_LISTEN_IP: z.string().default("0.0.0.0"),
   RTP_LISTEN_PORT: z.coerce.number().default(40000),
   ASTERISK_PUBLIC_IP: z.string().default("127.0.0.1"),
-  RTP_FORMAT: z.string().default("slin16"),
-  SAMPLE_RATE: z.coerce.number().default(16000),
+  /** IP:port pour external_host (si absent, utilise ASTERISK_PUBLIC_IP) */
+  MEDIA_SERVER_IP: z.string().optional(),
+  RTP_FORMAT: z.string().default("ulaw"),
+  SAMPLE_RATE: z.coerce.number().default(8000),
   TIMEZONE: z.string().default("America/Montreal"),
+
+  DEEPGRAM_API_KEY: z.string().optional(),
+  DG_STT_MODEL: z.string().default("nova-2"),
+  DG_TTS_MODEL: z.string().default("aura-asteria-en"),
 
   M365_TENANT_ID: z.string().optional(),
   M365_CLIENT_ID: z.string().optional(),
@@ -28,6 +34,9 @@ const schema = z.object({
   APPT_BUFFER_MIN: z.coerce.number().default(15),
 
   VOICE_AI_API_KEY: z.string().optional(),
+
+  /** Son/tone joué à la prise d'appel (ex: sound:beep, tone:ring;tonezone=fr) */
+  WELCOME_TONE: z.string().optional(),
 });
 
 export const env = schema.parse(process.env);
