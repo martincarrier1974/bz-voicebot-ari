@@ -109,7 +109,9 @@ export class DeepgramAgent {
             log.info({ type: msg.type, len: data.length }, "Agent: message (JSON en binaire)");
             this._handleServerMessage(msg, resolve, reject);
             return;
-          } catch (_) {}
+          } catch {
+            void 0; /* JSON invalide, ignorer */
+          }
         }
         if (isString) {
           try {
@@ -117,8 +119,8 @@ export class DeepgramAgent {
             log.info({ type: msg.type }, "Agent: message (texte)");
             this._handleServerMessage(msg, resolve, reject);
             return;
-          } catch (_) {
-            log.warn({ preview: data.slice(0, 150) }, "Agent: message texte non-JSON");
+          } catch (e) {
+            log.warn({ err: String(e), preview: data.slice(0, 150) }, "Agent: message texte non-JSON");
             return;
           }
         }
@@ -164,8 +166,13 @@ export class DeepgramAgent {
       return;
     }
     if (t === "Error") {
-      log.error({ msg }, "Deepgram Agent Error");
-      reject(new Error(msg.message ?? "Agent error"));
+      const errMsg = msg.message ?? msg.description ?? msg.error ?? JSON.stringify(msg);
+      log.error({ code: msg.code, message: msg.message, description: msg.description, full: msg }, "Deepgram Agent Error");
+      reject(new Error(errMsg));
+      return;
+    }
+    if (t === "Warning") {
+      log.warn({ code: msg.code, message: msg.message, description: msg.description, full: msg }, "Deepgram Agent Warning");
       return;
     }
     if (t === "AgentAudioDone") {

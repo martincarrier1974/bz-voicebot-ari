@@ -43,15 +43,15 @@ export class DeepgramTts {
               if (typeof b64 === "string") {
                 chunks.push(Buffer.from(b64, "base64"));
               }
-            } catch (_) {
-              // pas du JSON audio
+            } catch {
+              void 0; /* pas du JSON audio */
             }
             return;
           }
           try {
             chunks.push(Buffer.from(data, "base64"));
-          } catch (_) {
-            // pas du base64
+          } catch {
+            void 0; /* pas du base64 */
           }
         }
       });
