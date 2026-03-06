@@ -18,7 +18,11 @@ function encodeMulawSample(sample) {
   if (sample > MULAW_CLIP) sample = MULAW_CLIP;
   sample += MULAW_BIAS;
   let exponent = 7;
-  for (let expMask = 0x4000; (sample & expMask) === 0 && exponent > 0; exponent--, expMask >>= 1) {}
+  let expMask = 0x4000;
+  while ((sample & expMask) === 0 && exponent > 0) {
+    exponent -= 1;
+    expMask >>= 1;
+  }
   const mantissa = (sample >> (exponent + 3)) & 0x0f;
   return ~(sign | (exponent << 4) | mantissa) & 0xff;
 }
