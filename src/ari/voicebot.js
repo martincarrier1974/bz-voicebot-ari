@@ -28,12 +28,13 @@ async function handleCallWithRestApi(rtp, rawChannel) {
   const chanId = rawChannel.id;
   try {
     await axios.post(`${ariBase}/channels/${chanId}/answer`, {}, { auth: ariAuth });
-    const welcomeTone = env.WELCOME_TONE ?? "sound:beep";
-    try {
-      await axios.post(`${ariBase}/channels/${chanId}/play`, { media: [welcomeTone] }, { auth: ariAuth });
-      await new Promise((r) => setTimeout(r, 2000));
-    } catch {
-      /* ignore */
+    if (env.WELCOME_TONE) {
+      try {
+        await axios.post(`${ariBase}/channels/${chanId}/play`, { media: [env.WELCOME_TONE] }, { auth: ariAuth });
+        await new Promise((r) => setTimeout(r, 2000));
+      } catch {
+        /* ignore */
+      }
     }
     const { data: bridge } = await axios.post(
       ariBase + "/bridges",
@@ -140,12 +141,12 @@ export async function startVoicebot() {
       try {
         await channel.answer();
 
-        // Jouer un tone (beep) pour confirmer la prise d'appel
-        const welcomeTone = env.WELCOME_TONE ?? "sound:beep";
-        try {
-          await playToneAndWait(client, channel, welcomeTone);
-        } catch (toneErr) {
-          log.warn({ err: toneErr, chanId }, "Welcome tone failed, continuing without");
+        if (env.WELCOME_TONE) {
+          try {
+            await playToneAndWait(client, channel, env.WELCOME_TONE);
+          } catch (toneErr) {
+            log.warn({ err: toneErr, chanId }, "Welcome tone failed, continuing without");
+          }
         }
 
         const bridge = await client.bridges.create({ type: "mixing", name: `vb_${chanId}` });

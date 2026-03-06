@@ -18,7 +18,7 @@ const schema = z.object({
 
   DEEPGRAM_API_KEY: z.string().optional(),
   DG_STT_MODEL: z.string().default("nova-2"),
-  DG_TTS_MODEL: z.string().default("aura-asteria-en"),
+  DG_TTS_MODEL: z.string().default("aura-2-agathe-fr"),
 
   M365_TENANT_ID: z.string().optional(),
   M365_CLIENT_ID: z.string().optional(),
