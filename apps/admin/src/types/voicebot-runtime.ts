@@ -99,6 +99,12 @@ export type CallRuntimeState = {
   metadata: Record<string, unknown>;
 };
 
+export type LiveCallsSnapshot = {
+  updatedAt: string;
+  count: number;
+  calls: CallRuntimeState[];
+};
+
 export function createInitialCallRuntimeState(input?: {
   callId?: string;
   sessionId?: string;

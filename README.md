@@ -36,6 +36,7 @@ or `npm start`.
 - `src/utils/` — Logger (pino)
 - `src/ai/` — (TODO) Voice AI streaming integration
 - `runtime/voicebot-config.json` — configuration publiée par `apps/admin` et lue par le voicebot
+- `runtime/live-calls.json` — instantané des appels actifs pour l'admin
 - `docs/runtime-contract.md` — séparation entre config publiée et état de session
 
 ## Admin -> Voicebot runtime

@@ -1,9 +1,11 @@
 import { AdminShell, Card, Section } from "@/components/admin-shell";
 import { requireAuth } from "@/lib/auth";
+import { readLiveCallsSnapshot } from "@/lib/live-calls";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardPage() {
   await requireAuth();
+  const liveCalls = readLiveCallsSnapshot();
 
   const [promptCount, contextCount, flowCount, routeCount, latestFlow, flows, lastPublishedAt] = await Promise.all([
     prisma.prompt.count(),
@@ -28,6 +30,7 @@ export default async function DashboardPage() {
         <Card title="Prompts" value={promptCount} hint="Prompts actifs et scénarios" />
         <Card title="Contextes" value={contextCount} hint="Contextes métier disponibles" />
         <Card title="Flows" value={flowCount} hint="Flows configurés" />
+        <Card title="Appels en direct" value={liveCalls.count} hint="Sessions actuellement suivies" />
         <Card
           title="Routes actives"
           value={routeCount}

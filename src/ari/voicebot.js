@@ -21,6 +21,8 @@ const ariAuth = { username: env.ARI_USER, password: env.ARI_PASS };
 const ourExternalMediaIds = new Set();
 /** Quand on crée ExternalMedia via REST, on attend son StasisStart pour l'ajouter au bridge (évite 422). */
 const pendingBridgeAdd = new Map();
+/** Pipelines par canal pour pouvoir nettoyer l'état live à la fin d'appel. */
+const activePipelines = new Map();
 
 /**
  * Flux d'appel entièrement via REST ARI (quand le client Swagger n'a pas channels/bridges).
@@ -38,6 +40,7 @@ async function handleCallWithRestApi(rtp, rawChannel) {
       const pipeline = env.USE_DEEPGRAM_AGENT
         ? new VoiceAgentPipeline(rtp, { channelId: chanId, ariBase, ariAuth, runtimeConfig })
         : new VoicePipeline(rtp);
+      activePipelines.set(chanId, pipeline);
       pipeline.start().catch((e) => log.error({ err: e, chanId }, "Voice pipeline error"));
       rtp.setActivePipeline(pipeline);
     }
@@ -188,6 +191,7 @@ export async function startVoicebot() {
           const pipeline = env.USE_DEEPGRAM_AGENT
             ? new VoiceAgentPipeline(rtp, { channelId: chanId, ariBase, ariAuth, runtimeConfig })
             : new VoicePipeline(rtp);
+          activePipelines.set(chanId, pipeline);
           pipeline.start().catch((e) => log.error({ err: e, chanId }, "Voice pipeline error"));
         } else {
           log.warn("DEEPGRAM_API_KEY not set, voice pipeline disabled");
@@ -202,6 +206,12 @@ export async function startVoicebot() {
     client.start(env.ARI_APP);
     log.info({ app: env.ARI_APP }, "ARI Voicebot started (abonné à Stasis)");
     client.on("StasisEnd", (event, channel) => {
+      const chanId = channel?.id;
+      const pipeline = activePipelines.get(chanId);
+      if (pipeline?.close) {
+        pipeline.close();
+        activePipelines.delete(chanId);
+      }
       log.info({ chanId: channel?.id }, "StasisEnd");
     });
   });

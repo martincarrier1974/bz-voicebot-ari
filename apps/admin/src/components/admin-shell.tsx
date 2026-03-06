@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, MessageSquareText, Network, Route, PlayCircle, Settings, Shapes } from "lucide-react";
+import { LayoutDashboard, MessageSquareText, Network, Route, PlayCircle, Settings, Shapes, PhoneCall } from "lucide-react";
 import { logoutAction } from "@/app/actions";
 
 const navigation = [
@@ -9,6 +9,7 @@ const navigation = [
   { href: "/flows", label: "Flows", icon: Network },
   { href: "/routes", label: "Routes", icon: Route },
   { href: "/simulator", label: "Simulateur", icon: PlayCircle },
+  { href: "/live-calls", label: "Appels en direct", icon: PhoneCall },
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];
 

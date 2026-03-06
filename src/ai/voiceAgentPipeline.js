@@ -1,6 +1,7 @@
 import axios from "axios";
 import { env } from "../config/env.js";
 import { createInitialCallRuntimeState } from "../runtime/callRuntime.js";
+import { removeLiveCall, upsertLiveCall } from "../runtime/liveCallsRegistry.js";
 import { log } from "../utils/logger.js";
 import { DeepgramAgent } from "./deepgramAgent.js";
 
@@ -79,6 +80,10 @@ export class VoiceAgentPipeline {
     this._ready = false;
   }
 
+  _syncRuntimeState() {
+    upsertLiveCall(this.getRuntimeState());
+  }
+
   /**
    * Appelé par RtpServer pour chaque paquet audio (pipeline actif).
    * @param {Buffer} payloadBytes
@@ -87,6 +92,7 @@ export class VoiceAgentPipeline {
     if (this.agent && this._ready && payloadBytes?.length) {
       this.runtimeState.audio.isListening = true;
       this.runtimeState.session.updatedAt = Date.now();
+      this._syncRuntimeState();
       this.agent.sendAudio(payloadBytes);
     }
   }
@@ -101,6 +107,7 @@ export class VoiceAgentPipeline {
     this.runtimeState.flow.transferTarget = String(poste).trim();
     this.runtimeState.flow.currentStep = "transfer";
     this.runtimeState.session.updatedAt = Date.now();
+    this._syncRuntimeState();
     const envKey = TRANSFER_ENV_KEYS[poste];
     const route = (envKey && env[envKey]) ? env[envKey] : `dialplan:from-internal,${poste},1`;
 
@@ -123,6 +130,7 @@ export class VoiceAgentPipeline {
       this.runtimeState.metadata.transferMode = "continue";
       this.runtimeState.metadata.transferServiceName = matchedRoute?.serviceName ?? null;
       this.runtimeState.metadata.transferCompletedAt = Date.now();
+      this._syncRuntimeState();
       return `Transfert effectué au poste ${poste}.`;
     }
 
@@ -139,6 +147,7 @@ export class VoiceAgentPipeline {
     this.runtimeState.metadata.transferMode = "redirect";
     this.runtimeState.metadata.transferServiceName = matchedRoute?.serviceName ?? null;
     this.runtimeState.metadata.transferCompletedAt = Date.now();
+    this._syncRuntimeState();
     return `Transfert effectué au poste ${poste}.`;
   }
 
@@ -153,6 +162,7 @@ export class VoiceAgentPipeline {
       this.runtimeState.history = this.runtimeState.history.slice(-20);
     }
     this.runtimeState.session.updatedAt = Date.now();
+    this._syncRuntimeState();
   }
 
   _matchRouteFromText(text) {
@@ -222,6 +232,7 @@ export class VoiceAgentPipeline {
       this.runtimeState.audio.isListening = false;
       this.runtimeState.flow.currentStep = "agent_speaking";
       this.runtimeState.session.updatedAt = Date.now();
+      this._syncRuntimeState();
       return;
     }
 
@@ -229,6 +240,7 @@ export class VoiceAgentPipeline {
       this.runtimeState.audio.isSpeaking = false;
       this.runtimeState.audio.isListening = true;
       this.runtimeState.session.updatedAt = Date.now();
+      this._syncRuntimeState();
       return;
     }
 
@@ -246,6 +258,7 @@ export class VoiceAgentPipeline {
       this.runtimeState.flow.transferTarget = event.poste ?? this.runtimeState.flow.transferTarget;
       this.runtimeState.metadata.transferRequestedAt = Date.now();
       this.runtimeState.session.updatedAt = Date.now();
+      this._syncRuntimeState();
     }
   }
 
@@ -275,6 +288,7 @@ export class VoiceAgentPipeline {
     this.runtimeState.flow.currentStep = "ready";
     this.runtimeState.audio.isListening = true;
     this.runtimeState.session.updatedAt = Date.now();
+    this._syncRuntimeState();
     log.info("VoiceAgentPipeline started (Deepgram Agent)", onTransfer ? { transfert: true } : {});
   }
 
@@ -285,5 +299,6 @@ export class VoiceAgentPipeline {
     this.runtimeState.audio.isSpeaking = false;
     this.runtimeState.session.updatedAt = Date.now();
     this.agent?.close?.();
+    removeLiveCall(this.runtimeState.session.callId);
   }
 }
