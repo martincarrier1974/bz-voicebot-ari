@@ -40,6 +40,11 @@ export class DeepgramAgent {
   /**
    * Construit le message Settings (exemple fourni par l'utilisateur + env).
    */
+  _sendSettings() {
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    this.ws.send(JSON.stringify(this._buildSettings()));
+  }
+
   _buildSettings() {
     const prompt = env.DG_AGENT_PROMPT ?? DEFAULT_AGENT_PROMPT;
     const settings = {
@@ -92,36 +97,50 @@ export class DeepgramAgent {
 
       this.ws.on("open", () => {
         log.info("Deepgram Agent WebSocket connected");
+        this._sendSettings();
       });
 
       this.ws.on("message", (data) => {
-        if (Buffer.isBuffer(data)) {
-          if (this._settingsApplied && this.onAgentAudio && data.length > 0) {
-            const mulaw8k = linear16ToMulaw8k(Buffer.from(data), this._outputSampleRate);
-            if (mulaw8k.length > 0) {
-              if (!this._firstChunkLogged) {
-                this._firstChunkLogged = true;
-                log.info({ linear16: data.length, mulaw8k: mulaw8k.length }, "Agent audio: first chunk (linear16→mulaw)");
-              }
-              this.onAgentAudio(mulaw8k);
+        const isBuffer = Buffer.isBuffer(data);
+        const isString = typeof data === "string";
+        if (isBuffer && data.length < 500 && data[0] === 0x7b) {
+          try {
+            const msg = JSON.parse(data.toString("utf8"));
+            log.info({ type: msg.type, len: data.length }, "Agent: message (JSON en binaire)");
+            this._handleServerMessage(msg, resolve, reject);
+            return;
+          } catch (_) {}
+        }
+        if (isString) {
+          try {
+            const msg = JSON.parse(data);
+            log.info({ type: msg.type }, "Agent: message (texte)");
+            this._handleServerMessage(msg, resolve, reject);
+            return;
+          } catch (_) {
+            log.warn({ preview: data.slice(0, 150) }, "Agent: message texte non-JSON");
+            return;
+          }
+        }
+        if (isBuffer && this._settingsApplied && data.length > 0 && this.onAgentAudio) {
+          const mulaw8k = linear16ToMulaw8k(Buffer.from(data), this._outputSampleRate);
+          if (mulaw8k.length > 0) {
+            if (!this._firstChunkLogged) {
+              this._firstChunkLogged = true;
+              log.info({ linear16: data.length, mulaw8k: mulaw8k.length }, "Agent audio: first chunk (linear16→mulaw)");
             }
+            this.onAgentAudio(mulaw8k);
           }
           return;
         }
-        if (typeof data === "string") {
-          try {
-            const msg = JSON.parse(data);
-            this._handleServerMessage(msg, resolve, reject);
-          } catch (_) {
-            log.warn({ data: data.slice(0, 200) }, "Agent: message JSON invalide");
-          }
-          return;
+        if (isBuffer) {
+          log.debug({ len: data.length, settingsApplied: this._settingsApplied }, "Agent: message binaire ignoré");
         }
       });
 
-      this.ws.on("close", () => {
+      this.ws.on("close", (code, reason) => {
         this._stopKeepAlive();
-        log.info("Deepgram Agent WebSocket closed");
+        log.info({ code, reason: reason?.toString() || reason }, "Deepgram Agent WebSocket closed");
       });
 
       this.ws.on("error", (err) => {
@@ -134,8 +153,7 @@ export class DeepgramAgent {
   _handleServerMessage(msg, resolve, reject) {
     const t = msg.type;
     if (t === "Welcome") {
-      log.info("Deepgram Agent Welcome received, sending Settings");
-      this.ws.send(JSON.stringify(this._buildSettings()));
+      log.info("Deepgram Agent Welcome received (Settings déjà envoyés à l'ouverture)");
       return;
     }
     if (t === "SettingsApplied") {
