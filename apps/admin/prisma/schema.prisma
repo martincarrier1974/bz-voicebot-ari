@@ -1,0 +1,104 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Prompt {
+  id          String          @id @default(cuid())
+  key         String          @unique
+  name        String
+  scenario    String
+  description String?
+  content     String
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  versions    PromptVersion[]
+}
+
+model PromptVersion {
+  id         String   @id @default(cuid())
+  promptId    String
+  content     String
+  note        String?
+  createdAt   DateTime @default(now())
+  prompt      Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+}
+
+model Context {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  description      String
+  instructions     String
+  voiceTone        String
+  rules            String
+  limits           String
+  responseExamples String
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  flows            Flow[]
+}
+
+model RouteRule {
+  id          String       @id @default(cuid())
+  serviceName String       @unique
+  extension   String
+  keywords    String
+  priority    Int          @default(100)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  intents     FlowIntent[]
+}
+
+model Flow {
+  id                  String       @id @default(cuid())
+  name                String       @unique
+  welcomeMessage      String
+  silencePrompt       String
+  ambiguousPrompt     String
+  fallbackPrompt      String
+  finalAction         String
+  destinationLabel    String
+  destinationPost     String
+  maxFailedAttempts   Int          @default(2)
+  isActive            Boolean      @default(true)
+  contextId           String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  context             Context?     @relation(fields: [contextId], references: [id], onDelete: SetNull)
+  intents             FlowIntent[]
+}
+
+model FlowIntent {
+  id             String    @id @default(cuid())
+  flowId         String
+  routeRuleId    String?
+  label          String
+  keywords       String
+  response       String
+  finalAction    String
+  destinationPost String
+  priority       Int       @default(100)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  flow           Flow      @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  routeRule      RouteRule? @relation(fields: [routeRuleId], references: [id], onDelete: SetNull)
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  label     String
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

@@ -7,8 +7,17 @@
     "build": "npm run lint",
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
+    "postinstall": "node scripts/patch-ari-client.js",
     "lint": "eslint .",
-    "format": "prettier -w ."
+    "format": "prettier -w .",
+    "test:deepgram": "node scripts/test-deepgram.js",
+    "admin:dev": "npm --prefix apps/admin run dev",
+    "admin:build": "npm --prefix apps/admin run build",
+    "admin:start": "npm --prefix apps/admin run start",
+    "admin:db:generate": "npm --prefix apps/admin run db:generate",
+    "admin:db:push": "npm --prefix apps/admin run db:push",
+    "admin:db:seed": "npm --prefix apps/admin run db:seed",
+    "admin:db:reset": "npm --prefix apps/admin run db:reset"
   },
   "dependencies": {
     "ari-client": "^0.6.0",

@@ -19,3 +19,11 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Admin app (apps/admin)
+apps/admin/node_modules/
+apps/admin/.next/
+apps/admin/out/
+apps/admin/build/
+apps/admin/.env*
+apps/admin/dev.db
