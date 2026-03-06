@@ -23,21 +23,21 @@ async function main() {
       scenario: "main",
       description: "Prompt principal de l'agent vocal",
       content:
-        "Tu es l'agent téléphonique IA de BZ Telecom. Réponds en français, naturellement, et dirige rapidement l'appel vers le bon service.",
+        "Tu es l'agent téléphonique IA de BZ Telecom. Réponds en français québécois naturel, avec des phrases courtes, humaines et fluides, puis dirige rapidement l'appel vers le bon service.",
     },
     {
       key: "greeting",
       name: "Prompt accueil",
       scenario: "accueil",
       description: "Message d'accueil principal",
-      content: "Bienvenue chez BZ Telecom, comment pouvons-nous vous aider aujourd’hui ?",
+      content: "Bonjour, vous êtes chez BZ Telecom. Qu'est-ce que je peux faire pour vous aujourd'hui ?",
     },
     {
       key: "silence_retry",
       name: "Prompt relance silence",
       scenario: "silence",
       description: "Relance si l'appelant ne répond pas",
-      content: "Je suis toujours là. Dites-moi si vous cherchez le soutien technique, les ventes, la réception ou autre chose.",
+      content: "Je suis là. Est-ce que c'est pour le soutien technique, les ventes ou la réception ?",
     },
     {
       key: "clarification",
@@ -45,35 +45,35 @@ async function main() {
       scenario: "clarification",
       description: "Clarification si la demande est ambiguë",
       content:
-        "Je peux vous aider à diriger votre appel. Par exemple : soutien technique, ventes, réception ou autre. Quelle est la raison de votre appel ?",
+        "Je peux vous aider à diriger votre appel. Est-ce que c'est pour le soutien technique, les ventes ou la réception ?",
     },
     {
       key: "transfer_support",
       name: "Transfert support",
       scenario: "transfert_support",
       description: "Confirmation avant transfert support",
-      content: "Je vous transfère au soutien technique au poste 101.",
+      content: "Parfait, je vous transfère au soutien technique.",
     },
     {
       key: "transfer_sales",
       name: "Transfert ventes",
       scenario: "transfert_ventes",
       description: "Confirmation avant transfert ventes",
-      content: "Je vous transfère au service des ventes et soumissions au poste 102.",
+      content: "D'accord, je vous transfère aux ventes.",
     },
     {
       key: "transfer_reception",
       name: "Transfert réception",
       scenario: "transfert_reception",
       description: "Confirmation avant transfert réception",
-      content: "Je vous transfère à la réception au poste 105.",
+      content: "Je vais vous transférer à la réception.",
     },
     {
       key: "fallback_other",
       name: "Fallback / autre",
       scenario: "fallback",
       description: "Réponse si l'intention n'est pas reconnue",
-      content: "Je vais vous diriger vers la réception pour vous aider davantage.",
+      content: "Je vais vous transférer à la réception pour qu'on puisse mieux vous aider.",
     },
   ];
 
@@ -92,12 +92,12 @@ async function main() {
     data: {
       name: "Standard téléphonique BZ",
       description: "Contexte général du standard téléphonique",
-      instructions: "Accueillir, comprendre l'intention, clarifier si nécessaire, puis transférer rapidement.",
-      voiceTone: "Professionnel, chaleureux, québécois, naturel",
-      rules: "Une question à la fois. Toujours confirmer le poste avant transfert. Après 2 échecs, réception.",
+      instructions: "Accueillir de façon naturelle, comprendre l'intention, clarifier si nécessaire, puis transférer rapidement sans allonger la conversation.",
+      voiceTone: "Professionnel, chaleureux, québécois, naturel, pas robotique",
+      rules: "Une question à la fois. Toujours annoncer brièvement le transfert. Après 2 échecs, envoyer à la réception. Ne pas ajouter de phrase inutile après le transfert.",
       limits: "Ne pas faire de dépannage détaillé. Ne pas improviser des informations sensibles.",
       responseExamples:
-        "Bien sûr, je vous transfère au soutien technique. | D'accord, je vous transfère aux ventes. | Un instant, je vous mets à la réception.",
+        "Parfait, je vous transfère au soutien technique. | D'accord, je vous transfère aux ventes. | Je vais vous transférer à la réception.",
     },
   });
 
@@ -131,11 +131,11 @@ async function main() {
   const flow = await prisma.flow.create({
     data: {
       name: "Flow principal BZ Telecom",
-      welcomeMessage: "Bienvenue chez BZ Telecom, comment pouvons-nous vous aider aujourd’hui ?",
-      silencePrompt: "Je suis toujours là. Quelle est la raison de votre appel ?",
+      welcomeMessage: "Bonjour, vous êtes chez BZ Telecom. Qu'est-ce que je peux faire pour vous aujourd'hui ?",
+      silencePrompt: "Je suis là. Quelle est la raison de votre appel ?",
       ambiguousPrompt:
-        "Je peux vous aider à diriger votre appel. Par exemple : soutien technique, ventes, réception ou autre. Quelle est la raison de votre appel ?",
-      fallbackPrompt: "Je vais vous transférer à la réception pour vous aider davantage.",
+        "Je peux vous aider à diriger votre appel. Est-ce que c'est pour le soutien technique, les ventes ou la réception ?",
+      fallbackPrompt: "Je vais vous transférer à la réception pour qu'on puisse mieux vous aider.",
       finalAction: "transfer",
       destinationLabel: "Réception / Autres",
       destinationPost: "105",
@@ -151,7 +151,7 @@ async function main() {
         routeRuleId: support.id,
         label: "Soutien technique / support",
         keywords: support.keywords,
-        response: "Je vous transfère au soutien technique au poste 101.",
+        response: "Parfait, je vous transfère au soutien technique.",
         finalAction: "transfer",
         destinationPost: "101",
         priority: 10,
@@ -161,7 +161,7 @@ async function main() {
         routeRuleId: sales.id,
         label: "Ventes / soumission",
         keywords: sales.keywords,
-        response: "Je vous transfère au service des ventes et soumissions au poste 102.",
+        response: "D'accord, je vous transfère aux ventes.",
         finalAction: "transfer",
         destinationPost: "102",
         priority: 20,
@@ -171,7 +171,7 @@ async function main() {
         routeRuleId: reception.id,
         label: "Réception / autres",
         keywords: reception.keywords,
-        response: "Je vous transfère à la réception au poste 105.",
+        response: "Je vais vous transférer à la réception.",
         finalAction: "transfer",
         destinationPost: "105",
         priority: 99,
