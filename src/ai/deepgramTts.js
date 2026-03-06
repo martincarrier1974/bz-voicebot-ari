@@ -28,21 +28,37 @@ export class DeepgramTts {
     return new Promise((resolve, reject) => {
       ws.on("open", () => {
         ws.send(JSON.stringify({ type: "Speak", text }));
-        ws.send(JSON.stringify({ type: "Close" }));
+        setTimeout(() => ws.send(JSON.stringify({ type: "Close" })), 100);
       });
       ws.on("message", (data) => {
         if (Buffer.isBuffer(data)) {
           chunks.push(data);
-        } else if (typeof data === "string") {
+          return;
+        }
+        if (typeof data === "string") {
+          if (data.startsWith("{")) {
+            try {
+              const obj = JSON.parse(data);
+              const b64 = obj.chunk ?? obj.audio ?? obj.data;
+              if (typeof b64 === "string") {
+                chunks.push(Buffer.from(b64, "base64"));
+              }
+            } catch (_) {
+              // pas du JSON audio
+            }
+            return;
+          }
           try {
             chunks.push(Buffer.from(data, "base64"));
           } catch (_) {
-            // pas du base64 audio, ignorer (ex: événement JSON)
+            // pas du base64
           }
         }
       });
       ws.on("close", () => {
-        resolve(Buffer.concat(chunks));
+        const buf = Buffer.concat(chunks);
+        log.info({ bytes: buf.length, chunks: chunks.length }, "Deepgram TTS received");
+        resolve(buf);
       });
       ws.on("error", (err) => {
         log.error({ err }, "Deepgram TTS error");
