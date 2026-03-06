@@ -1,36 +1,62 @@
 #!/usr/bin/env node
 /**
- * Applique le correctif sur ari-client pour éviter le crash WebSocket
- * (processMessage: try-catch + gardes apis/eventModel.properties + msg Buffer->string).
- * À lancer une fois après: npm install
+ * Applique un correctif tolérant sur ari-client pour éviter le crash WebSocket
+ * dans processMessage. Le script ne doit jamais faire échouer un build CI/CD
+ * si le format exact du fichier varie d'une version à l'autre.
  */
-import { readFileSync, writeFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const clientPath = join(__dirname, "..", "node_modules", "ari-client", "lib", "client.js");
 
+if (!existsSync(clientPath)) {
+  console.warn("ari-client introuvable, patch ignoré.");
+  process.exit(0);
+}
+
 let code = readFileSync(clientPath, "utf8");
 
-// Déjà patché ?
-if (code.includes("[ari-client] processMessage error")) {
-  console.log("ari-client déjà patché, rien à faire.");
+if (
+  code.includes("[ari-client] processMessage error") ||
+  code.includes("!self._swagger || !self._swagger.apis ||") ||
+  code.includes("(self._swagger && self._swagger.apis && self._swagger.apis.events)")
+) {
+  console.log("ari-client déjà patché ou protégé, rien à faire.");
   process.exit(0);
 }
 
-// Correctif minimal si le bloc complet n'est pas trouvé : sécuriser la ligne .apis.events
-if (code.includes("!self._swagger.apis.events || !self._swagger.apis.events.models") && !code.includes("!self._swagger || !self._swagger.apis ||")) {
-  code = code.replace(
+let changed = false;
+
+const guardVariants = [
+  [
+    "if (!self._swagger.apis.events || !self._swagger.apis.events.models)",
+    "if (!self._swagger || !self._swagger.apis || !self._swagger.apis.events || !self._swagger.apis.events.models)",
+  ],
+  [
     "if (!self._swagger.apis.events || !self._swagger.apis.events.models) {",
-    "if (!self._swagger || !self._swagger.apis || !self._swagger.apis.events || !self._swagger.apis.events.models) {"
-  );
-  writeFileSync(clientPath, code);
-  console.log("Patch ari-client (gardes minimales) appliqué.");
-  process.exit(0);
+    "if (!self._swagger || !self._swagger.apis || !self._swagger.apis.events || !self._swagger.apis.events.models) {",
+  ],
+];
+
+for (const [oldStr, newStr] of guardVariants) {
+  if (code.includes(oldStr)) {
+    code = code.replace(oldStr, newStr);
+    changed = true;
+    break;
+  }
 }
 
-// 1) Remplacer le début de processMessage (event = JSON.parse(msg) + gardes)
+if (!changed && code.includes("var eventModels = self._swagger.apis.events.models")) {
+  code = code.replace(
+    /(\s*)var eventModels = self\._swagger\.apis\.events\.models;/,
+    (_match, spaces) =>
+      `${spaces}var eventModels = (self._swagger && self._swagger.apis && self._swagger.apis.events) ? self._swagger.apis.events.models : null;\n${spaces}if (!eventModels) return;`
+  );
+  changed = true;
+}
+
 const old1 = `    function processMessage (msg, flags) {
       var event = {};
       if (msg) {
@@ -75,13 +101,11 @@ const new1 = `    function processMessage (msg, flags) {
         // Pass in any property that is a known type as an object
         _.each(eventModel.properties, function (prop) {`;
 
-if (!code.includes(old1)) {
-  console.error("Impossible de trouver le bloc à remplacer (début processMessage). Version ari-client peut-être différente.");
-  process.exit(1);
+if (code.includes(old1)) {
+  code = code.replace(old1, new1);
+  changed = true;
 }
-code = code.replace(old1, new1);
 
-// 2) Ajouter le catch avant la fin de processMessage
 const old2 = `      self.emit(event.type, event, resources);
       // If appropriate, emit instance specific events
       if (instanceIds.length > 0) {
@@ -118,11 +142,15 @@ const new2 = `      self.emit(event.type, event, resources);
     /**
      *  Process open event.`;
 
-if (!code.includes(old2)) {
-  console.error("Impossible de trouver le bloc pour ajouter le catch.");
-  process.exit(1);
+if (code.includes(old2)) {
+  code = code.replace(old2, new2);
+  changed = true;
 }
-code = code.replace(old2, new2);
+
+if (!changed) {
+  console.warn("Format ari-client inconnu, patch ignoré sans échec.");
+  process.exit(0);
+}
 
 writeFileSync(clientPath, code);
-console.log("Patch ari-client appliqué avec succès.");
+console.log("Patch ari-client appliqué.");
