@@ -33,6 +33,12 @@ export class DeepgramTts {
       ws.on("message", (data) => {
         if (Buffer.isBuffer(data)) {
           chunks.push(data);
+        } else if (typeof data === "string") {
+          try {
+            chunks.push(Buffer.from(data, "base64"));
+          } catch (_) {
+            // pas du base64 audio, ignorer (ex: événement JSON)
+          }
         }
       });
       ws.on("close", () => {
