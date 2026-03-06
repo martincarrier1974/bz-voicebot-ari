@@ -1,6 +1,7 @@
 import WebSocket from "ws";
 import { env } from "../config/env.js";
 import { log } from "../utils/logger.js";
+import { linear16ToMulaw8k } from "../utils/audioConvert.js";
 
 const AGENT_WS_URL = "wss://agent.deepgram.com/v1/agent/converse";
 const KEEP_ALIVE_INTERVAL_MS = 5000;
@@ -32,6 +33,8 @@ export class DeepgramAgent {
     this.ws = null;
     this._settingsApplied = false;
     this._keepAliveId = null;
+    this._outputSampleRate = 24000;
+    this._firstChunkLogged = false;
   }
 
   /**
@@ -47,8 +50,8 @@ export class DeepgramAgent {
           sample_rate: 8000,
         },
         output: {
-          encoding: "mulaw",
-          sample_rate: 8000,
+          encoding: "linear16",
+          sample_rate: 24000,
           container: "none",
         },
       },
@@ -94,7 +97,14 @@ export class DeepgramAgent {
       this.ws.on("message", (data) => {
         if (Buffer.isBuffer(data)) {
           if (this._settingsApplied && this.onAgentAudio && data.length > 0) {
-            this.onAgentAudio(Buffer.from(data));
+            const mulaw8k = linear16ToMulaw8k(Buffer.from(data), this._outputSampleRate);
+            if (mulaw8k.length > 0) {
+              if (!this._firstChunkLogged) {
+                this._firstChunkLogged = true;
+                log.info({ linear16: data.length, mulaw8k: mulaw8k.length }, "Agent audio: first chunk (linear16→mulaw)");
+              }
+              this.onAgentAudio(mulaw8k);
+            }
           }
           return;
         }
