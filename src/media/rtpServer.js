@@ -45,7 +45,24 @@ export class RtpServer {
    * @param {{ handleAudio(payload: Buffer): void } | null} pipeline
    */
   setActivePipeline(pipeline) {
+    if (this.activePipeline && this.activePipeline !== pipeline && typeof this.activePipeline.close === "function") {
+      this.activePipeline.close();
+    }
     this.activePipeline = pipeline;
+  }
+
+  /**
+   * Réinitialise l'état RTP entre deux appels.
+   * Sans ça, le 2e appel peut réutiliser l'ancien remote/SSRC/queue et perdre le message d'accueil.
+   */
+  resetSession() {
+    this.stopPlayback();
+    this.remote = null;
+    this.activePipeline = null;
+    this._seq = 0;
+    this._timestamp = 0;
+    this._ssrc = (Math.random() * 0xffffffff) >>> 0;
+    this._sentFirstPacket = false;
   }
 
   setRemote(rinfo) {

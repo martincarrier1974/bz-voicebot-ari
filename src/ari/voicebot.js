@@ -28,11 +28,13 @@ const pendingBridgeAdd = new Map();
 async function handleCallWithRestApi(rtp, rawChannel) {
   const chanId = rawChannel.id;
   try {
+    rtp.resetSession();
+
     // Démarrer le pipeline tout de suite pour enregistrer son callback RTP avant que les paquets
     // du nouvel appel arrivent (évite que le 2e appel n'entende pas le message de bienvenue).
     if (env.DEEPGRAM_API_KEY) {
       const pipeline = env.USE_DEEPGRAM_AGENT
-        ? new VoiceAgentPipeline(rtp)
+        ? new VoiceAgentPipeline(rtp, { channelId: chanId, ariBase, ariAuth })
         : new VoicePipeline(rtp);
       pipeline.start().catch((e) => log.error({ err: e, chanId }, "Voice pipeline error"));
       rtp.setActivePipeline(pipeline);
@@ -146,6 +148,7 @@ export async function startVoicebot() {
       }
 
       try {
+        rtp.resetSession();
         await channel.answer();
 
         if (env.WELCOME_TONE) {
@@ -180,7 +183,7 @@ export async function startVoicebot() {
 
         if (env.DEEPGRAM_API_KEY) {
           const pipeline = env.USE_DEEPGRAM_AGENT
-            ? new VoiceAgentPipeline(rtp)
+            ? new VoiceAgentPipeline(rtp, { channelId: chanId, ariBase, ariAuth })
             : new VoicePipeline(rtp);
           pipeline.start().catch((e) => log.error({ err: e, chanId }, "Voice pipeline error"));
         } else {
