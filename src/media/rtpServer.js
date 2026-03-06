@@ -6,6 +6,9 @@ const RTP_HEADER_LEN = 12;
 const PCMU_PT = 0;
 const FRAME_BYTES = 160; // 20ms @ 8kHz mulaw
 const FRAME_INTERVAL_MS = 20;
+const START_BUFFER_FRAMES = 6; // ~120ms avant de démarrer la lecture
+const START_MAX_WAIT_MS = 120; // ne pas attendre trop longtemps pour une courte phrase
+const EMPTY_GRACE_TICKS = 8; // ~160ms de tolérance si la file se vide brièvement
 
 /**
  * Parse RTP header (minimal: version, payload type, seq, timestamp, SSRC).
@@ -38,6 +41,9 @@ export class RtpServer {
     this._packetCount = 0;
     this._byteCount = 0;
     this._sentFirstPacket = false;
+    this._playbackStarted = false;
+    this._playbackStartRequestedAt = 0;
+    this._emptyTicks = 0;
   }
 
   /**
@@ -63,6 +69,9 @@ export class RtpServer {
     this._timestamp = 0;
     this._ssrc = (Math.random() * 0xffffffff) >>> 0;
     this._sentFirstPacket = false;
+    this._playbackStarted = false;
+    this._playbackStartRequestedAt = 0;
+    this._emptyTicks = 0;
   }
 
   setRemote(rinfo) {
@@ -111,15 +120,34 @@ export class RtpServer {
 
   _startPlaybackIfNeeded() {
     if (this._playIntervalId != null) return;
+    this._playbackStarted = false;
+    this._playbackStartRequestedAt = Date.now();
+    this._emptyTicks = 0;
     this._playIntervalId = setInterval(() => this._sendNextFrame(), FRAME_INTERVAL_MS);
   }
 
   _sendNextFrame() {
+    if (!this._playbackStarted) {
+      const waitedMs = Date.now() - this._playbackStartRequestedAt;
+      if (this._playQueue.length < START_BUFFER_FRAMES && waitedMs < START_MAX_WAIT_MS) {
+        return;
+      }
+      this._playbackStarted = true;
+    }
+
     if (this._playQueue.length === 0) {
+      this._emptyTicks += 1;
+      if (this._emptyTicks < EMPTY_GRACE_TICKS) {
+        return;
+      }
       clearInterval(this._playIntervalId);
       this._playIntervalId = null;
+      this._playbackStarted = false;
+      this._playbackStartRequestedAt = 0;
+      this._emptyTicks = 0;
       return;
     }
+    this._emptyTicks = 0;
     const frame = this._playQueue.shift();
     if (!this.remote) return;
     if (!this._sentFirstPacket) {
@@ -143,6 +171,9 @@ export class RtpServer {
       clearInterval(this._playIntervalId);
       this._playIntervalId = null;
     }
+    this._playbackStarted = false;
+    this._playbackStartRequestedAt = 0;
+    this._emptyTicks = 0;
   }
 
   getStats() {
