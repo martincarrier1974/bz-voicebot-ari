@@ -27,3 +27,4 @@ apps/admin/out/
 apps/admin/build/
 apps/admin/.env*
 apps/admin/dev.db
+runtime/voicebot-config.json

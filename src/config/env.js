@@ -27,9 +27,16 @@ const schema = z.object({
   /** Modèle LLM pour l'agent (ex: gpt-4o-mini, gpt-4o) */
   DG_AGENT_LLM_MODEL: z.string().default("gpt-4o-mini"),
   /** Message de bienvenue de l'agent (parlé au démarrage) */
-  DG_AGENT_GREETING: z.string().default("Bienvenue chez BZ Telecom. Comment puis-je vous aider?"),
+  DG_AGENT_GREETING: z.string().default("Bienvenue chez BZ Telecom, comment pouvons-nous vous aider aujourd'hui ?"),
   /** Prompt système de l'agent (comportement, ton). Limité à 25000 caractères. */
   DG_AGENT_PROMPT: z.string().optional(),
+  /** Fichier JSON publié par l'admin et lu par le voicebot */
+  RUNTIME_CONFIG_PATH: z.string().default("runtime/voicebot-config.json"),
+
+  /** Endpoints ARI pour transfert (ex: Local/101@from-internal ou PJSIP/101) */
+  TRANSFER_POSTE_101: z.string().optional(),
+  TRANSFER_POSTE_102: z.string().optional(),
+  TRANSFER_POSTE_105: z.string().optional(),
 
   M365_TENANT_ID: z.string().optional(),
   M365_CLIENT_ID: z.string().optional(),

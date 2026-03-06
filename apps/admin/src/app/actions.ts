@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSession, clearSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { publishRuntimeConfig } from "@/lib/runtime-config";
 
 function toBoolean(value: FormDataEntryValue | null) {
   return value === "on" || value === "true";
@@ -221,5 +222,10 @@ export async function saveSettingAction(formData: FormData) {
     await prisma.setting.create({ data });
   }
 
+  revalidateAdmin();
+}
+
+export async function publishRuntimeConfigAction() {
+  await publishRuntimeConfig();
   revalidateAdmin();
 }

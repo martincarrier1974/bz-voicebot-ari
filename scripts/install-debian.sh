@@ -6,6 +6,11 @@
 set -e
 INSTALL_DIR="${INSTALL_DIR:-/opt/bz-voicebot-ari}"
 REPO_URL="${REPO_URL:-https://github.com/martincarrier1974/bz-voicebot-ari.git}"
+# Utiliser sudo si disponible, sinon rien (exécution en root)
+SUDO=""
+if command -v sudo &>/dev/null && [ "$(id -u)" -ne 0 ]; then
+  SUDO="sudo"
+fi
 
 echo "=== BZ Voicebot - Installation Debian ==="
 echo "Répertoire: $INSTALL_DIR"
@@ -91,9 +96,11 @@ read -p "Installer le service systemd (démarrage auto) ? (o/n) [o]: " INSTALL_S
 INSTALL_SVC="${INSTALL_SVC:-o}"
 
 if [ "$INSTALL_SVC" = "o" ] || [ "$INSTALL_SVC" = "O" ] || [ "$INSTALL_SVC" = "y" ]; then
-  SVC_USER="${SUDO_USER:-$USER}"
-  if [ "$SVC_USER" = "root" ] && [ -n "$SUDO_USER" ]; then
+  SVC_USER="root"
+  if [ "$(id -u)" -ne 0 ] && [ -n "$SUDO_USER" ]; then
     SVC_USER="$SUDO_USER"
+  elif [ "$(id -u)" -ne 0 ]; then
+    SVC_USER="$USER"
   fi
   cat > /tmp/bz-voicebot.service << EOF
 [Unit]
@@ -112,12 +119,12 @@ Environment=NODE_ENV=production
 [Install]
 WantedBy=multi-user.target
 EOF
-  sudo mv /tmp/bz-voicebot.service /etc/systemd/system/
-  sudo systemctl daemon-reload
-  sudo systemctl enable bz-voicebot
+  $SUDO mv /tmp/bz-voicebot.service /etc/systemd/system/
+  $SUDO systemctl daemon-reload
+  $SUDO systemctl enable bz-voicebot
   echo "[OK] Service systemd installé et activé."
-  echo "    Démarrer: sudo systemctl start bz-voicebot"
-  echo "    Statut:   sudo systemctl status bz-voicebot"
+  echo "    Démarrer: $SUDO systemctl start bz-voicebot"
+  echo "    Statut:   $SUDO systemctl status bz-voicebot"
   echo "    Logs:     journalctl -u bz-voicebot -f"
 else
   echo "Pour lancer manuellement: cd $INSTALL_DIR && npm start"

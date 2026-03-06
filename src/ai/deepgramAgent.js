@@ -9,13 +9,13 @@ const KEEP_ALIVE_INTERVAL_MS = 5000;
 /** Prompt système par défaut (agent téléphonique BZ Telecom – routage). */
 const DEFAULT_AGENT_PROMPT = `Tu es l'agent téléphonique IA de BZ Telecom.
 
-Tu parles à des clients au téléphone. La conversation doit être naturelle, simple, chaleureuse et fluide.
+Tu parles à des clients au téléphone au Québec. La conversation doit être naturelle, simple, chaleureuse et fluide.
 Tu peux faire un vrai transfert d'appel avec la fonction "transfert".
 Quand l'intention est claire, tu dois transférer l'appel sans faire perdre de temps au client.
 Ne dis jamais que tu ne peux pas transférer.
 
 Accueil :
-"Bienvenue chez BZ Telecom, comment puis-je vous aider aujourd'hui ?"
+"BZ Telecom, bonjour, comment puis-je vous aider aujourd'hui ?"
 
 Routage :
 - soutien technique / support = poste 101
@@ -31,6 +31,8 @@ Style de conversation :
 - n'utilise jamais de markdown
 - n'utilise pas de phrases inutiles comme "..." ou des silences écrits
 - n'utilise pas de formulations robotiques
+- utilise un français québécois naturel et professionnel
+- privilégie des formulations comme "bien sûr", "pas de problème", "je vous transfère", "un instant"
 
 Règles de conduite :
 - si la demande est claire dès la première phrase, confirme brièvement puis transfère
@@ -44,6 +46,9 @@ Phrases naturelles à privilégier :
 - "D'accord."
 - "Je comprends."
 - "Très bien."
+- "Pas de problème."
+- "Un instant."
+- "Je vous mets en relation avec la bonne personne."
 
 Avant chaque transfert, dis une seule phrase courte et naturelle :
 - "Je vous transfère au soutien technique au poste 101."
@@ -61,7 +66,90 @@ Exemples :
 - Si le client dit "Je veux un prix" ou "je veux parler aux ventes", transfère au poste 102.
 - Si le client dit "Je ne sais pas trop" ou "j'appelle pour autre chose", transfère au poste 105.
 
-Réponds toujours uniquement en français oral naturel.`;
+Réponds toujours uniquement en français oral naturel, avec un ton professionnel québécois.`;
+
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getDefaultRoutes() {
+  return [
+    { serviceName: "soutien technique", extension: "101", keywords: ["support", "soutien", "technique"], priority: 10 },
+    { serviceName: "ventes et soumissions", extension: "102", keywords: ["vente", "soumission", "prix"], priority: 20 },
+    { serviceName: "réception", extension: "105", keywords: ["réception", "accueil", "autre"], priority: 30 },
+  ];
+}
+
+function getPrimaryFlow(runtimeConfig) {
+  return Array.isArray(runtimeConfig?.flows) && runtimeConfig.flows.length > 0 ? runtimeConfig.flows[0] : null;
+}
+
+function getFallbackRoute(runtimeConfig, routes) {
+  const primaryFlow = getPrimaryFlow(runtimeConfig);
+  const flowDestination = primaryFlow?.destinationPost ? routes.find((route) => route.extension === String(primaryFlow.destinationPost)) : null;
+  if (flowDestination) return flowDestination;
+  const receptionRoute = routes.find((route) => normalizeText(route.serviceName).includes("reception"));
+  if (receptionRoute) return receptionRoute;
+  const ext105 = routes.find((route) => route.extension === "105");
+  return ext105 ?? routes[routes.length - 1] ?? null;
+}
+
+function buildGreetingFromRuntime(runtimeConfig) {
+  const primaryFlow = getPrimaryFlow(runtimeConfig);
+  return runtimeConfig?.prompts?.greeting || primaryFlow?.welcomeMessage || "";
+}
+
+function buildPromptFromRuntime(runtimeConfig, routes) {
+  if (!runtimeConfig) return "";
+
+  const companyName = runtimeConfig.companyName || "BZ Telecom";
+  const primaryFlow = getPrimaryFlow(runtimeConfig);
+  const fallbackRoute = getFallbackRoute(runtimeConfig, routes);
+  const maxFailedAttempts = primaryFlow?.maxFailedAttempts ?? 2;
+  const routeLines = routes.map((route) => {
+    const keywords = Array.isArray(route.keywords) && route.keywords.length > 0
+      ? ` Mots-clés fréquents : ${route.keywords.join(", ")}.`
+      : "";
+    return `- ${route.serviceName} = poste ${route.extension}.${keywords}`;
+  });
+  const intentLines = Array.isArray(primaryFlow?.intents) && primaryFlow.intents.length > 0
+    ? primaryFlow.intents.map((intent) => {
+      const keywords = Array.isArray(intent.keywords) && intent.keywords.length > 0 ? intent.keywords.join(", ") : "aucun";
+      return `- ${intent.label} -> poste ${intent.destinationPost}. Mots-clés : ${keywords}. Réponse courte suggérée : ${intent.response}`;
+    })
+    : [];
+
+  return [
+    `Tu es l'agent téléphonique IA de ${companyName}.`,
+    "Tu parles à des clients au téléphone au Québec. La conversation doit être naturelle, simple, chaleureuse et fluide.",
+    "Tu peux faire un vrai transfert d'appel avec la fonction \"transfert\". Quand l'intention est claire, tu dois transférer l'appel rapidement.",
+    buildGreetingFromRuntime(runtimeConfig) ? `Accueil exact à utiliser : "${buildGreetingFromRuntime(runtimeConfig)}"` : "",
+    routes.length > 0 ? `Routage actif :\n${routeLines.join("\n")}` : "",
+    primaryFlow?.silencePrompt ? `Si le client reste silencieux, utilise cette relance : "${primaryFlow.silencePrompt}"` : "",
+    primaryFlow?.ambiguousPrompt ? `Si la demande est vague, utilise cette relance : "${primaryFlow.ambiguousPrompt}"` : "",
+    primaryFlow?.fallbackPrompt ? `Si la compréhension échoue, utilise ce fallback : "${primaryFlow.fallbackPrompt}"` : "",
+    fallbackRoute
+      ? `Après ${maxFailedAttempts} tentative(s) de clarification sans intention claire, transfère vers ${fallbackRoute.serviceName} au poste ${fallbackRoute.extension}.`
+      : "",
+    runtimeConfig?.context?.instructions ? `Instructions métier : ${runtimeConfig.context.instructions}` : "",
+    runtimeConfig?.context?.voiceTone ? `Ton vocal souhaité : ${runtimeConfig.context.voiceTone}` : "",
+    runtimeConfig?.context?.rules ? `Règles à respecter : ${runtimeConfig.context.rules}` : "",
+    runtimeConfig?.context?.limits ? `Limites : ${runtimeConfig.context.limits}` : "",
+    runtimeConfig?.context?.responseExamples ? `Exemples de réponses : ${runtimeConfig.context.responseExamples}` : "",
+    intentLines.length > 0 ? `Intentions configurées :\n${intentLines.join("\n")}` : "",
+    runtimeConfig?.prompts?.main ? `Directives supplémentaires : ${runtimeConfig.prompts.main}` : "",
+    "Style de conversation : parle comme un bon agent de réception téléphonique, avec des phrases courtes, naturelles, professionnelles et québécoises.",
+    "Avant chaque transfert, dis une seule phrase courte et naturelle, puis appelle immédiatement la fonction \"transfert\" avec le bon poste.",
+    "Ne pose pas d'autre question une fois la destination claire. N'utilise jamais de markdown.",
+    "Réponds toujours uniquement en français oral naturel.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 /**
  * Client WebSocket pour l'agent conversationnel Deepgram (STT + LLM + TTS).
@@ -75,12 +163,26 @@ export class DeepgramAgent {
   constructor(onAgentAudio, options = {}) {
     this.onAgentAudio = onAgentAudio;
     this.onTransfer = options.onTransfer ?? null;
+    this.onEvent = typeof options.onEvent === "function" ? options.onEvent : null;
+    this.runtimeConfig = options.runtimeConfig ?? null;
+    this._routes = Array.isArray(options.routes) && options.routes.length > 0 ? options.routes : getDefaultRoutes();
+    this.agentGreeting = options.greeting ?? (buildGreetingFromRuntime(this.runtimeConfig) || null);
+    this.agentPrompt = options.prompt ?? (buildPromptFromRuntime(this.runtimeConfig, this._routes) || null);
     this.ws = null;
     this._settingsApplied = false;
     this._keepAliveId = null;
     this._outputSampleRate = 24000;
     this._firstChunkLogged = false;
     this._transferTriggered = false;
+  }
+
+  _emitEvent(event) {
+    if (!this.onEvent) return;
+    try {
+      this.onEvent(event);
+    } catch (err) {
+      log.warn({ err, eventType: event?.type }, "Agent event callback failed");
+    }
   }
 
   /**
@@ -92,7 +194,11 @@ export class DeepgramAgent {
   }
 
   _buildSettings() {
-    const prompt = env.DG_AGENT_PROMPT ?? DEFAULT_AGENT_PROMPT;
+    const prompt = this.agentPrompt ?? env.DG_AGENT_PROMPT ?? DEFAULT_AGENT_PROMPT;
+    const transferExtensions = [...new Set(this._routes.map((route) => String(route.extension).trim()).filter(Boolean))];
+    const transferDescription = this._routes
+      .map((route) => `${route.extension} = ${route.serviceName}`)
+      .join(", ");
     const settings = {
       type: "Settings",
       audio: {
@@ -130,14 +236,14 @@ export class DeepgramAgent {
           functions: [
             {
               name: "transfert",
-              description: "Transférer l'appelant vers un poste. À appeler après avoir confirmé oralement le transfert. 101 = soutien technique, 102 = vente/soumission, 105 = réception.",
+              description: `Transférer l'appelant vers un poste. À appeler après avoir confirmé oralement le transfert. ${transferDescription}.`,
               parameters: {
                 type: "object",
                 properties: {
                   poste: {
                     type: "string",
-                    enum: ["101", "102", "105"],
-                    description: "Numéro du poste (101, 102 ou 105)",
+                    enum: transferExtensions,
+                    description: `Numéro du poste (${transferExtensions.join(", ")})`,
                   },
                 },
                 required: ["poste"],
@@ -145,7 +251,7 @@ export class DeepgramAgent {
             },
           ],
         },
-        greeting: env.DG_AGENT_GREETING ?? "Bienvenue chez BZ Telecom, comment pouvons-nous vous aider aujourd'hui ?",
+        greeting: this.agentGreeting ?? env.DG_AGENT_GREETING ?? "Bienvenue chez BZ Telecom, comment pouvons-nous vous aider aujourd'hui ?",
       },
     };
     return settings;
@@ -239,28 +345,30 @@ export class DeepgramAgent {
       return;
     }
     if (t === "AgentAudioDone") {
+      this._emitEvent({ type: "agent_audio_done" });
       return;
     }
     if (t === "AgentStartedSpeaking") {
+      this._emitEvent({ type: "agent_audio_start" });
       return;
     }
     if (t === "ConversationText") {
       const role = msg.role;
       const text = msg.content ?? msg.text;
       log.info({ role, text }, "Agent ConversationText");
+      this._emitEvent({ type: "conversation_text", role, text });
 
       // Fallback robuste: si l'agent annonce oralement un transfert mais n'émet pas
       // correctement FunctionCallRequest, on déclenche quand même le vrai transfert.
       if (!this._transferTriggered && role === "assistant" && this.onTransfer && typeof text === "string") {
         const normalized = text.toLowerCase();
-        let poste = "";
-        if (normalized.includes("poste 101") || normalized.includes("soutien technique")) poste = "101";
-        else if (normalized.includes("poste 102") || normalized.includes("vente") || normalized.includes("soumission")) poste = "102";
-        else if (normalized.includes("poste 105") || normalized.includes("réception")) poste = "105";
+        const route = this._matchRouteFromText(text);
+        const poste = route?.extension ?? "";
 
         if (poste && (normalized.includes("je vous transf") || normalized.includes("transfert en cours"))) {
           this._transferTriggered = true;
-          log.info({ poste, text }, "Fallback transfert déclenché depuis la réponse agent");
+          this._emitEvent({ type: "transfer_requested", poste, reason: "assistant_text_fallback" });
+          log.info({ poste, text, serviceName: route?.serviceName }, "Fallback transfert déclenché depuis la réponse agent");
           Promise.resolve(this.onTransfer(poste))
             .then((content) => {
               log.info({ poste, content }, "Fallback transfert réussi");
@@ -288,18 +396,22 @@ export class DeepgramAgent {
           typeof fn.name === "string" &&
           ["transfert", "transfer", "transfer_call"].includes(fn.name.toLowerCase());
         if (isTransferFunction && this.onTransfer) {
-          let poste = "";
-          try {
-            const args = typeof fn.arguments === "string" ? JSON.parse(fn.arguments) : fn.arguments;
-            poste = String(args?.poste ?? args?.extension ?? args?.department ?? "").trim();
-          } catch {
-            poste = "";
-          }
-          if (poste !== "101" && poste !== "102" && poste !== "105") {
-            this._sendFunctionCallResponse(fn.id, fn.name, "Poste invalide. Utiliser 101, 102 ou 105.");
+          const route = (() => {
+            try {
+              const args = typeof fn.arguments === "string" ? JSON.parse(fn.arguments) : fn.arguments;
+              return this._resolveTransferRoute(args);
+            } catch {
+              return null;
+            }
+          })();
+          const poste = route?.extension ?? "";
+          if (!poste) {
+            const availableExtensions = this._routes.map((item) => item.extension).join(", ");
+            this._sendFunctionCallResponse(fn.id, fn.name, `Poste invalide. Utiliser ${availableExtensions}.`);
             continue;
           }
           this._transferTriggered = true;
+          this._emitEvent({ type: "transfer_requested", poste, reason: "function_call" });
           Promise.resolve(this.onTransfer(poste))
             .then((content) => this._sendFunctionCallResponse(fn.id, fn.name, content ?? `Transfert effectué vers le poste ${poste}.`))
             .catch((err) => {
@@ -322,6 +434,42 @@ export class DeepgramAgent {
   _sendFunctionCallResponse(id, name, content) {
     if (this.ws?.readyState !== WebSocket.OPEN) return;
     this.ws.send(JSON.stringify({ type: "FunctionCallResponse", id, name, content }));
+  }
+
+  _matchRouteFromText(text) {
+    const normalizedText = normalizeText(text);
+    if (!normalizedText) return null;
+
+    return this._routes.find((route) => {
+      if (normalizedText.includes(`poste ${normalizeText(route.extension)}`)) return true;
+      if (normalizedText.includes(normalizeText(route.serviceName))) return true;
+      return Array.isArray(route.keywords) && route.keywords.some((keyword) => normalizedText.includes(normalizeText(keyword)));
+    }) ?? null;
+  }
+
+  _resolveTransferRoute(args) {
+    if (!args || typeof args !== "object") return null;
+
+    const candidates = [
+      args.poste,
+      args.extension,
+      args.department,
+      args.service,
+      args.serviceName,
+      args.label,
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
+
+    for (const candidate of candidates) {
+      const byExtension = this._routes.find((route) => route.extension === candidate);
+      if (byExtension) return byExtension;
+
+      const byText = this._matchRouteFromText(candidate);
+      if (byText) return byText;
+    }
+
+    return this._matchRouteFromText(JSON.stringify(args));
   }
 
   _startKeepAlive() {

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 export default async function DashboardPage() {
   await requireAuth();
 
-  const [promptCount, contextCount, flowCount, routeCount, latestFlow, flows] = await Promise.all([
+  const [promptCount, contextCount, flowCount, routeCount, latestFlow, flows, lastPublishedAt] = await Promise.all([
     prisma.prompt.count(),
     prisma.context.count(),
     prisma.flow.count(),
@@ -16,6 +16,7 @@ export default async function DashboardPage() {
       orderBy: { updatedAt: "desc" },
       take: 5,
     }),
+    prisma.setting.findUnique({ where: { key: "runtime_last_published_at" } }),
   ]);
 
   return (
@@ -31,6 +32,15 @@ export default async function DashboardPage() {
           title="Routes actives"
           value={routeCount}
           hint={latestFlow ? `Dernier flow modifié : ${latestFlow.name}` : "Aucun flow"}
+        />
+        <Card
+          title="Runtime publié"
+          value={lastPublishedAt ? "Oui" : "Non"}
+          hint={
+            lastPublishedAt
+              ? `Dernière publication : ${new Date(lastPublishedAt.value).toLocaleString("fr-CA")}`
+              : "Publiez la config depuis Paramètres"
+          }
         />
       </div>
 

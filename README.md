@@ -32,8 +32,75 @@ or `npm start`.
 - `src/media/` — RTP server (UDP) receiving/sending audio to Asterisk
 - `src/calendar/` — M365 Graph (getSchedule, createEvent) and service → mailbox routing
 - `src/config/` — Env validation (Zod)
+- `src/runtime/` — état volatile d'un appel en cours
 - `src/utils/` — Logger (pino)
 - `src/ai/` — (TODO) Voice AI streaming integration
+- `runtime/voicebot-config.json` — configuration publiée par `apps/admin` et lue par le voicebot
+- `docs/runtime-contract.md` — séparation entre config publiée et état de session
+
+## Admin -> Voicebot runtime
+
+Le panneau `apps/admin` peut maintenant publier une configuration partagée dans `runtime/voicebot-config.json`.
+
+- Depuis l’admin web, ouvre `Paramètres` puis clique sur `Publier vers le voicebot`.
+- Le voicebot relit ce fichier au début de chaque nouvel appel.
+- Les éléments publiés incluent les prompts actifs, le flow principal, le contexte, les routes et les intentions.
+
+### Variable d’environnement
+
+```bash
+RUNTIME_CONFIG_PATH=runtime/voicebot-config.json
+```
+
+Par défaut, aucune action supplémentaire n’est requise après une publication si le voicebot tourne déjà avec cette version du code.
+
+## Tester depuis Asterisk
+
+Pour que l’appel atteigne le voicebot, Asterisk doit envoyer le canal en **Stasis** vers l’app nommée comme `ARI_APP` (par défaut `voicebot`).
+
+### 1. Démarrer le voicebot
+
+Sur la machine où tourne le serveur Node (accessible depuis Asterisk pour ARI + RTP) :
+
+```bash
+npm start
+```
+
+Tu dois voir par exemple : `RTP server listening`, `ARI Voicebot started`.
+
+### 2. Configurer le dialplan
+
+**Option A – Asterisk (extensions.conf)**  
+Envoie l’appel vers Stasis puis raccroche à la fin (pour un test simple) :
+
+```ini
+; Exemple : extension 8500 envoie vers le voicebot
+exten => 8500,1,Answer()
+same => n,Stasis(voicebot)
+same => n,Hangup()
+```
+
+Remplace `voicebot` si tu as changé `ARI_APP` dans le `.env`. Recharge le dialplan : `asterisk -rx "dialplan reload"`.
+
+**Option B – FreePBX**  
+1. **Applications** → **Custom Destinations** : crée une destination “Voicebot” avec comme destination `custom-voicebot,1,1` (ou le contexte que tu utilises).  
+2. Dans **Custom Extensions** (ou le fichier custom du dialplan), ajoute par exemple :
+
+```ini
+[custom-voicebot]
+exten => s,1,Answer()
+same => n,Stasis(voicebot)
+same => n,Hangup()
+```
+
+3. Utilise cette destination dans une **Inbound Route** (numéro entrant) ou dans un **IVR / Ring Group** pour qu’en composant ce numéro l’appel aille au voicebot.
+
+### 3. Passer un appel test
+
+- Depuis un téléphone branché sur Asterisk/FreePBX : compose l’extension (ex. **8500**) ou le numéro configuré en Inbound Route.
+- L’appel doit être répondu, tu entendras le tone de bienvenue puis le voicebot (Deepgram). Dans les logs du voicebot tu dois voir un `StasisStart`, puis `Bridge + ExternalMedia ready`, puis `RTP remote learned`.
+
+Si tu ne vois aucun log à l’appel, le dialplan n’envoie pas encore le canal en Stasis : revérifier l’extension / la route et que `Stasis(voicebot)` est bien exécuté.
 
 ## Logs et dépannage
 

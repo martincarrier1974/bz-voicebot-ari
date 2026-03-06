@@ -1,6 +1,7 @@
 import ari from "ari-client";
 import axios from "axios";
 import { env } from "../config/env.js";
+import { loadRuntimeConfig } from "../config/runtimeConfig.js";
 import { log } from "../utils/logger.js";
 import { RtpServer } from "../media/rtpServer.js";
 import { VoicePipeline } from "../ai/voicePipeline.js";
@@ -33,8 +34,9 @@ async function handleCallWithRestApi(rtp, rawChannel) {
     // Démarrer le pipeline tout de suite pour enregistrer son callback RTP avant que les paquets
     // du nouvel appel arrivent (évite que le 2e appel n'entende pas le message de bienvenue).
     if (env.DEEPGRAM_API_KEY) {
+      const runtimeConfig = loadRuntimeConfig();
       const pipeline = env.USE_DEEPGRAM_AGENT
-        ? new VoiceAgentPipeline(rtp, { channelId: chanId, ariBase, ariAuth })
+        ? new VoiceAgentPipeline(rtp, { channelId: chanId, ariBase, ariAuth, runtimeConfig })
         : new VoicePipeline(rtp);
       pipeline.start().catch((e) => log.error({ err: e, chanId }, "Voice pipeline error"));
       rtp.setActivePipeline(pipeline);
@@ -182,8 +184,9 @@ export async function startVoicebot() {
         log.info({ bridge: bridge.id, extMedia: ext.id, externalHost }, "Bridge + ExternalMedia ready");
 
         if (env.DEEPGRAM_API_KEY) {
+          const runtimeConfig = loadRuntimeConfig();
           const pipeline = env.USE_DEEPGRAM_AGENT
-            ? new VoiceAgentPipeline(rtp, { channelId: chanId, ariBase, ariAuth })
+            ? new VoiceAgentPipeline(rtp, { channelId: chanId, ariBase, ariAuth, runtimeConfig })
             : new VoicePipeline(rtp);
           pipeline.start().catch((e) => log.error({ err: e, chanId }, "Voice pipeline error"));
         } else {
