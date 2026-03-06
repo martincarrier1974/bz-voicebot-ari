@@ -230,12 +230,19 @@ export class DeepgramAgent {
     }
     if (t === "FunctionCallRequest" && Array.isArray(msg.functions)) {
       for (const fn of msg.functions) {
-        log.info({ functionCall: fn }, "Agent FunctionCallRequest reçu");
+        log.info(
+          {
+            function_name: fn.name,
+            client_side: fn.client_side,
+            has_on_transfer: Boolean(this.onTransfer),
+            arguments: fn.arguments,
+          },
+          "Agent FunctionCallRequest reçu"
+        );
         const isTransferFunction =
           typeof fn.name === "string" &&
           ["transfert", "transfer", "transfer_call"].includes(fn.name.toLowerCase());
-        const isClientSide = fn.client_side !== false;
-        if (isClientSide && isTransferFunction && this.onTransfer) {
+        if (isTransferFunction && this.onTransfer) {
           let poste = "";
           try {
             const args = typeof fn.arguments === "string" ? JSON.parse(fn.arguments) : fn.arguments;
@@ -255,7 +262,7 @@ export class DeepgramAgent {
             });
         } else {
           log.warn(
-            { name: fn.name, client_side: fn.client_side, hasOnTransfer: Boolean(this.onTransfer) },
+            { function_name: fn.name, client_side: fn.client_side, has_on_transfer: Boolean(this.onTransfer) },
             "FunctionCallRequest ignoré"
           );
         }
