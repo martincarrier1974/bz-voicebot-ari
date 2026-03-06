@@ -6,19 +6,43 @@ import { linear16ToMulaw8k } from "../utils/audioConvert.js";
 const AGENT_WS_URL = "wss://agent.deepgram.com/v1/agent/converse";
 const KEEP_ALIVE_INTERVAL_MS = 5000;
 
-/** Prompt système par défaut (assistant téléphonique BZ Telecom). */
-const DEFAULT_AGENT_PROMPT = `#Rôle
-Tu es l'assistant vocal de BZ Telecom. Tu réponds au téléphone de manière chaleureuse et professionnelle.
+/** Prompt système par défaut (agent téléphonique BZ Telecom – routage). */
+const DEFAULT_AGENT_PROMPT = `Tu es l'agent téléphonique IA de BZ Telecom.
 
-#Directives
-- Réponds en français, de façon claire et concise.
-- Limite tes réponses à 1–2 phrases sauf si le client demande plus de détails.
-- Pas de formatage markdown (gras, liens, listes à puces).
-- Si la demande est floue, demande une précision.
-- Si tu ne peux pas aider (conseil juridique, médical, financier), dis-le poliment et propose d'orienter vers un professionnel.
+Tu peux faire un vrai transfert d'appel avec la fonction "transfert".
+Tu dois utiliser cette fonction quand l'appelant veut être dirigé vers un service.
+Ne dis jamais que tu ne peux pas transférer.
 
-#Objectif
-Accueillir l'appelant, comprendre sa demande (rendez-vous, information, support) et l'aider ou le rediriger.`;
+Accueil :
+"Bienvenue chez BZ Telecom, comment pouvons-nous vous aider aujourd'hui ?"
+
+Routage :
+- soutien technique / support = poste 101
+- vente / soumission = poste 102
+- réception / autres = poste 105
+
+Règles obligatoires :
+- Si l'appelant demande le soutien technique, confirme brièvement puis appelle la fonction "transfert" avec le poste "101".
+- Si l'appelant demande les ventes, une soumission ou le service commercial, confirme brièvement puis appelle la fonction "transfert" avec le poste "102".
+- Si l'appelant demande la réception, un autre service, ou si la demande reste floue après une relance, confirme brièvement puis appelle la fonction "transfert" avec le poste "105".
+- Avant chaque transfert, dis toujours une phrase courte de confirmation, par exemple :
+  "Je vous transfère au soutien technique au poste 101."
+  "Je vous transfère au service des ventes et soumissions au poste 102."
+  "Je vous transfère à la réception au poste 105."
+- Après cette phrase de confirmation, appelle immédiatement la fonction "transfert".
+- Ne pose pas d'autres questions une fois que l'intention de transfert est claire.
+- Ne donne pas de dépannage technique détaillé. Ton rôle principal est de diriger l'appel.
+
+Si la demande n'est pas claire, dis exactement :
+"Je peux vous aider à diriger votre appel. Par exemple : soutien technique, vente, réception ou autre. Quelle est la raison de votre appel ?"
+
+Style :
+- réponses courtes
+- polies
+- naturelles
+- une seule question à la fois
+- français oral seulement
+- pas de markdown`;
 
 /**
  * Client WebSocket pour l'agent conversationnel Deepgram (STT + LLM + TTS).
@@ -27,9 +51,11 @@ Accueillir l'appelant, comprendre sa demande (rendez-vous, information, support)
 export class DeepgramAgent {
   /**
    * @param {(audioMulaw8k: Buffer) => void} onAgentAudio - appelé avec l'audio mulaw 8kHz à jouer vers le RTP
+   * @param {{ onTransfer?: (poste: string) => Promise<string> | string }} [options] - si fourni, appelle onTransfer("101"|"102"|"105") pour transfert ARI
    */
-  constructor(onAgentAudio) {
+  constructor(onAgentAudio, options = {}) {
     this.onAgentAudio = onAgentAudio;
+    this.onTransfer = options.onTransfer ?? null;
     this.ws = null;
     this._settingsApplied = false;
     this._keepAliveId = null;
@@ -81,8 +107,25 @@ export class DeepgramAgent {
             model: env.DG_AGENT_LLM_MODEL ?? "gpt-4o-mini",
           },
           prompt,
+          functions: [
+            {
+              name: "transfert",
+              description: "Transférer l'appelant vers un poste. À appeler après avoir confirmé oralement le transfert. 101 = soutien technique, 102 = vente/soumission, 105 = réception.",
+              parameters: {
+                type: "object",
+                properties: {
+                  poste: {
+                    type: "string",
+                    enum: ["101", "102", "105"],
+                    description: "Numéro du poste (101, 102 ou 105)",
+                  },
+                },
+                required: ["poste"],
+              },
+            },
+          ],
         },
-        greeting: env.DG_AGENT_GREETING ?? "Bienvenue chez BZ Telecom. Comment puis-je vous aider?",
+        greeting: env.DG_AGENT_GREETING ?? "Bienvenue chez BZ Telecom, comment pouvons-nous vous aider aujourd'hui ?",
       },
     };
     return settings;
@@ -185,7 +228,36 @@ export class DeepgramAgent {
       log.info({ role: msg.role, text: msg.content ?? msg.text }, "Agent ConversationText");
       return;
     }
+    if (t === "FunctionCallRequest" && Array.isArray(msg.functions)) {
+      for (const fn of msg.functions) {
+        if (fn.client_side && fn.name === "transfert" && this.onTransfer) {
+          let poste = "";
+          try {
+            const args = typeof fn.arguments === "string" ? JSON.parse(fn.arguments) : fn.arguments;
+            poste = String(args?.poste ?? "").trim();
+          } catch {
+            poste = "";
+          }
+          if (poste !== "101" && poste !== "102" && poste !== "105") {
+            this._sendFunctionCallResponse(fn.id, fn.name, "Poste invalide. Utiliser 101, 102 ou 105.");
+            continue;
+          }
+          Promise.resolve(this.onTransfer(poste))
+            .then((content) => this._sendFunctionCallResponse(fn.id, fn.name, content ?? `Transfert effectué vers le poste ${poste}.`))
+            .catch((err) => {
+              log.error({ err, poste }, "Transfert ARI échoué");
+              this._sendFunctionCallResponse(fn.id, fn.name, `Erreur: ${err?.message ?? "transfert impossible"}.`);
+            });
+        }
+      }
+      return;
+    }
     log.debug({ type: t }, "Agent message");
+  }
+
+  _sendFunctionCallResponse(id, name, content) {
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    this.ws.send(JSON.stringify({ type: "FunctionCallResponse", id, name, content }));
   }
 
   _startKeepAlive() {
