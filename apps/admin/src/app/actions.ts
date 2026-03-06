@@ -216,8 +216,10 @@ export async function saveSettingAction(formData: FormData) {
     value: String(formData.get("value") || ""),
   };
 
-  if (id) {
-    await prisma.setting.update({ where: { id }, data });
+  const existingByKey = await prisma.setting.findUnique({ where: { key: data.key } });
+
+  if (existingByKey) {
+    await prisma.setting.update({ where: { id: existingByKey.id }, data });
   } else {
     await prisma.setting.create({ data });
   }
