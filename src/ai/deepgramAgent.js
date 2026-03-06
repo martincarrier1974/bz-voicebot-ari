@@ -230,11 +230,16 @@ export class DeepgramAgent {
     }
     if (t === "FunctionCallRequest" && Array.isArray(msg.functions)) {
       for (const fn of msg.functions) {
-        if (fn.client_side && fn.name === "transfert" && this.onTransfer) {
+        log.info({ functionCall: fn }, "Agent FunctionCallRequest reçu");
+        const isTransferFunction =
+          typeof fn.name === "string" &&
+          ["transfert", "transfer", "transfer_call"].includes(fn.name.toLowerCase());
+        const isClientSide = fn.client_side !== false;
+        if (isClientSide && isTransferFunction && this.onTransfer) {
           let poste = "";
           try {
             const args = typeof fn.arguments === "string" ? JSON.parse(fn.arguments) : fn.arguments;
-            poste = String(args?.poste ?? "").trim();
+            poste = String(args?.poste ?? args?.extension ?? args?.department ?? "").trim();
           } catch {
             poste = "";
           }
@@ -248,6 +253,11 @@ export class DeepgramAgent {
               log.error({ err, poste }, "Transfert ARI échoué");
               this._sendFunctionCallResponse(fn.id, fn.name, `Erreur: ${err?.message ?? "transfert impossible"}.`);
             });
+        } else {
+          log.warn(
+            { name: fn.name, client_side: fn.client_side, hasOnTransfer: Boolean(this.onTransfer) },
+            "FunctionCallRequest ignoré"
+          );
         }
       }
       return;
