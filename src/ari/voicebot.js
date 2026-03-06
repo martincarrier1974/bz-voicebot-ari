@@ -1,8 +1,12 @@
 import ari from "ari-client";
+import axios from "axios";
 import { env } from "../config/env.js";
 import { log } from "../utils/logger.js";
 import { RtpServer } from "../media/rtpServer.js";
 import { VoicePipeline } from "../ai/voicePipeline.js";
+
+const ariBase = env.ARI_URL.replace(/\/$/, "") + (env.ARI_URL.includes("/ari") ? "" : "/ari");
+const ariAuth = { username: env.ARI_USER, password: env.ARI_PASS };
 
 /**
  * This sets up:
@@ -13,6 +17,48 @@ import { VoicePipeline } from "../ai/voicePipeline.js";
  */
 /** Channel IDs we create (ExternalMedia). Ignore their StasisStart to avoid re-running call logic. */
 const ourExternalMediaIds = new Set();
+/** Quand on crée ExternalMedia via REST, on attend son StasisStart pour l'ajouter au bridge (évite 422). */
+const pendingBridgeAdd = new Map();
+
+/**
+ * Flux d'appel entièrement via REST ARI (quand le client Swagger n'a pas channels/bridges).
+ * L'ajout du canal ExternalMedia au bridge est fait dans StasisStart quand Asterisk envoie l'événement.
+ */
+async function handleCallWithRestApi(rtp, rawChannel) {
+  const chanId = rawChannel.id;
+  try {
+    await axios.post(`${ariBase}/channels/${chanId}/answer`, {}, { auth: ariAuth });
+    const welcomeTone = env.WELCOME_TONE ?? "sound:beep";
+    try {
+      await axios.post(`${ariBase}/channels/${chanId}/play`, { media: [welcomeTone] }, { auth: ariAuth });
+      await new Promise((r) => setTimeout(r, 2000));
+    } catch {
+      /* ignore */
+    }
+    const { data: bridge } = await axios.post(
+      ariBase + "/bridges",
+      { type: "mixing", name: `vb_${chanId}` },
+      { auth: ariAuth }
+    );
+    await axios.post(`${ariBase}/bridges/${bridge.id}/addChannel`, { channel: chanId }, { auth: ariAuth });
+    const mediaHost = env.MEDIA_SERVER_IP ?? env.ASTERISK_PUBLIC_IP;
+    const externalHost = `${mediaHost}:${env.RTP_LISTEN_PORT}`;
+    log.info({ externalHost }, "RTP target");
+    const { data: ext } = await axios.post(
+      ariBase + "/channels/externalMedia",
+      null,
+      {
+        params: { app: env.ARI_APP, external_host: externalHost, format: "ulaw" },
+        auth: ariAuth,
+      }
+    );
+    ourExternalMediaIds.add(ext.id);
+    log.info({ extId: ext.id }, "ExternalMedia created (attente StasisStart pour addChannel)");
+    pendingBridgeAdd.set(ext.id, { bridgeId: bridge.id, externalHost, chanId, rtp });
+  } catch (e) {
+    log.error({ err: e, chanId }, "Error in call handling (REST)");
+  }
+}
 
 /**
  * Joue un son/tone sur le canal et attend la fin (ou timeout).
@@ -54,17 +100,40 @@ export async function startVoicebot() {
     if (err) throw err;
 
     client.on("StasisStart", async (event, channel) => {
-      const chanId = channel.id;
-      log.info({ chanId, caller: channel.caller }, "StasisStart");
-
+      const raw = (channel && channel.id) ? channel : event.channel;
+      if (!raw || !raw.id) {
+        log.warn("StasisStart without channel id");
+        return;
+      }
+      const chanId = raw.id;
+      const pending = pendingBridgeAdd.get(chanId);
+      if (pending) {
+        pendingBridgeAdd.delete(chanId);
+        try {
+          await axios.post(`${ariBase}/bridges/${pending.bridgeId}/addChannel`, { channel: chanId }, { auth: ariAuth });
+          log.info({ bridge: pending.bridgeId, extMedia: chanId, externalHost: pending.externalHost }, "Bridge + ExternalMedia ready (après StasisStart)");
+          if (env.DEEPGRAM_API_KEY) {
+            const pipeline = new VoicePipeline(pending.rtp);
+            pipeline.start().catch((e) => log.error({ err: e, chanId: pending.chanId }, "VoicePipeline error"));
+          }
+        } catch (e) {
+          log.error({ err: e, chanId, bridgeId: pending.bridgeId }, "addChannel (ExternalMedia) failed");
+        }
+        return;
+      }
       if (ourExternalMediaIds.has(chanId)) {
         ourExternalMediaIds.delete(chanId);
         log.debug({ chanId }, "StasisStart for our ExternalMedia channel, skip");
         return;
       }
-      // Canal créé par nous (ExternalMedia) : nom typique "ExternalMedia/..."
-      if (channel.name && String(channel.name).toLowerCase().startsWith("externalmedia/")) {
-        log.debug({ chanId, name: channel.name }, "StasisStart for ExternalMedia channel, skip");
+      if (raw.name && String(raw.name).toLowerCase().startsWith("externalmedia/")) {
+        log.debug({ chanId, name: raw.name }, "StasisStart for ExternalMedia channel, skip");
+        return;
+      }
+      log.info({ chanId, caller: raw.caller }, "StasisStart");
+
+      if (!channel || typeof channel.answer !== "function") {
+        await handleCallWithRestApi(rtp, raw);
         return;
       }
 
@@ -83,8 +152,10 @@ export async function startVoicebot() {
         await bridge.addChannel({ channel: chanId });
 
         // Create external media channel pointing to our RTP server.
+        // MEDIA_SERVER_IP = IP de la machine où Node tourne (celle qu'Asterisk doit joindre pour le RTP).
         const mediaHost = env.MEDIA_SERVER_IP ?? env.ASTERISK_PUBLIC_IP;
         const externalHost = `${mediaHost}:${env.RTP_LISTEN_PORT}`;
+        log.info({ externalHost, hint: "Asterisk envoie le RTP ici; cette IP doit être celle de cette machine" }, "RTP target");
 
         const ext = await client.channels.externalMedia({
           app: env.ARI_APP,
@@ -113,6 +184,9 @@ export async function startVoicebot() {
     });
 
     client.start(env.ARI_APP);
-    log.info("ARI Voicebot started");
+    log.info({ app: env.ARI_APP }, "ARI Voicebot started (abonné à Stasis)");
+    client.on("StasisEnd", (event, channel) => {
+      log.info({ chanId: channel?.id }, "StasisEnd");
+    });
   });
 }
