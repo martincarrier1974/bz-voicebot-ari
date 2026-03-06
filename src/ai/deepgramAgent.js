@@ -61,6 +61,7 @@ export class DeepgramAgent {
     this._keepAliveId = null;
     this._outputSampleRate = 24000;
     this._firstChunkLogged = false;
+    this._transferTriggered = false;
   }
 
   /**
@@ -225,7 +226,32 @@ export class DeepgramAgent {
       return;
     }
     if (t === "ConversationText") {
-      log.info({ role: msg.role, text: msg.content ?? msg.text }, "Agent ConversationText");
+      const role = msg.role;
+      const text = msg.content ?? msg.text;
+      log.info({ role, text }, "Agent ConversationText");
+
+      // Fallback robuste: si l'agent annonce oralement un transfert mais n'émet pas
+      // correctement FunctionCallRequest, on déclenche quand même le vrai transfert.
+      if (!this._transferTriggered && role === "assistant" && this.onTransfer && typeof text === "string") {
+        const normalized = text.toLowerCase();
+        let poste = "";
+        if (normalized.includes("poste 101") || normalized.includes("soutien technique")) poste = "101";
+        else if (normalized.includes("poste 102") || normalized.includes("vente") || normalized.includes("soumission")) poste = "102";
+        else if (normalized.includes("poste 105") || normalized.includes("réception")) poste = "105";
+
+        if (poste && (normalized.includes("je vous transf") || normalized.includes("transfert en cours"))) {
+          this._transferTriggered = true;
+          log.info({ poste, text }, "Fallback transfert déclenché depuis la réponse agent");
+          Promise.resolve(this.onTransfer(poste))
+            .then((content) => {
+              log.info({ poste, content }, "Fallback transfert réussi");
+            })
+            .catch((err) => {
+              this._transferTriggered = false;
+              log.error({ err, poste }, "Fallback transfert échoué");
+            });
+        }
+      }
       return;
     }
     if (t === "FunctionCallRequest" && Array.isArray(msg.functions)) {
@@ -254,9 +280,11 @@ export class DeepgramAgent {
             this._sendFunctionCallResponse(fn.id, fn.name, "Poste invalide. Utiliser 101, 102 ou 105.");
             continue;
           }
+          this._transferTriggered = true;
           Promise.resolve(this.onTransfer(poste))
             .then((content) => this._sendFunctionCallResponse(fn.id, fn.name, content ?? `Transfert effectué vers le poste ${poste}.`))
             .catch((err) => {
+              this._transferTriggered = false;
               log.error({ err, poste }, "Transfert ARI échoué");
               this._sendFunctionCallResponse(fn.id, fn.name, `Erreur: ${err?.message ?? "transfert impossible"}.`);
             });
