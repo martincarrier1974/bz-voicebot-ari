@@ -13,9 +13,22 @@ function getResponseForText(text) {
   return `J'ai bien compris: ${text}. Voulez-vous un rendez-vous?`;
 }
 
+/** Mulaw silence = 0xff. On ne déclenche barge-in que si l'audio a de l'énergie (voix). */
+const MULAW_SILENCE = 0xff;
+const BARGE_IN_VOICE_RATIO = 0.05; // au moins 5 % d'échantillons non-silence
+
+function hasVoice(payload) {
+  if (!payload?.length) return false;
+  let nonSilence = 0;
+  for (let i = 0; i < payload.length; i++) {
+    if (payload[i] !== MULAW_SILENCE) nonSilence++;
+  }
+  return nonSilence / payload.length >= BARGE_IN_VOICE_RATIO;
+}
+
 /**
  * Pipeline: RTP <-> Deepgram STT -> règle -> Deepgram TTS -> RTP.
- * Barge-in: si audio entrant pendant le TTS, on arrête le playback.
+ * Barge-in: on arrête le playback seulement si l'utilisateur parle (pas sur le silence).
  */
 export class VoicePipeline {
   /**
@@ -36,7 +49,7 @@ export class VoicePipeline {
         this._greetingPlayed = true;
         this._playResponse("Bonjour. Dites-moi comment je peux vous aider.");
       }
-      if (this._playing) {
+      if (this._playing && hasVoice(payloadBytes)) {
         this._bargeInRequested = true;
         this.rtpServer.stopPlayback();
         this._playing = false;
