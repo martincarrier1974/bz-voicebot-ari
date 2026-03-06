@@ -20,6 +20,17 @@ const schema = z.object({
   DG_STT_MODEL: z.string().default("nova-2"),
   DG_TTS_MODEL: z.string().default("aura-2-agathe-fr"),
 
+  /** Utiliser l'agent conversationnel Deepgram (STT + LLM + TTS) au lieu de STT + règles + TTS */
+  USE_DEEPGRAM_AGENT: z.coerce.boolean().default(false),
+  /** Clé API OpenAI pour l'agent (think provider) */
+  OPENAI_API_KEY: z.string().optional(),
+  /** Modèle LLM pour l'agent (ex: gpt-4o-mini, gpt-4o) */
+  DG_AGENT_LLM_MODEL: z.string().default("gpt-4o-mini"),
+  /** Message de bienvenue de l'agent (parlé au démarrage) */
+  DG_AGENT_GREETING: z.string().default("Bienvenue chez BZ Telecom. Comment puis-je vous aider?"),
+  /** Prompt système de l'agent (comportement, ton). Limité à 25000 caractères. */
+  DG_AGENT_PROMPT: z.string().optional(),
+
   M365_TENANT_ID: z.string().optional(),
   M365_CLIENT_ID: z.string().optional(),
   M365_CLIENT_SECRET: z.string().optional(),
