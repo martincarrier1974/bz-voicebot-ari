@@ -27,6 +27,14 @@ const pendingBridgeAdd = new Map();
 async function handleCallWithRestApi(rtp, rawChannel) {
   const chanId = rawChannel.id;
   try {
+    // Démarrer le pipeline tout de suite pour enregistrer son callback RTP avant que les paquets
+    // du nouvel appel arrivent (évite que le 2e appel n'entende pas le message de bienvenue).
+    if (env.DEEPGRAM_API_KEY) {
+      const pipeline = new VoicePipeline(rtp);
+      pipeline.start().catch((e) => log.error({ err: e, chanId }, "VoicePipeline error"));
+      rtp.setActivePipeline(pipeline);
+    }
+
     await axios.post(`${ariBase}/channels/${chanId}/answer`, {}, { auth: ariAuth });
     if (env.WELCOME_TONE) {
       try {
@@ -55,7 +63,7 @@ async function handleCallWithRestApi(rtp, rawChannel) {
     );
     ourExternalMediaIds.add(ext.id);
     log.info({ extId: ext.id }, "ExternalMedia created (attente StasisStart pour addChannel)");
-    pendingBridgeAdd.set(ext.id, { bridgeId: bridge.id, externalHost, chanId, rtp });
+    pendingBridgeAdd.set(ext.id, { bridgeId: bridge.id, externalHost, chanId });
   } catch (e) {
     log.error({ err: e, chanId }, "Error in call handling (REST)");
   }
@@ -113,10 +121,6 @@ export async function startVoicebot() {
         try {
           await axios.post(`${ariBase}/bridges/${pending.bridgeId}/addChannel`, { channel: chanId }, { auth: ariAuth });
           log.info({ bridge: pending.bridgeId, extMedia: chanId, externalHost: pending.externalHost }, "Bridge + ExternalMedia ready (après StasisStart)");
-          if (env.DEEPGRAM_API_KEY) {
-            const pipeline = new VoicePipeline(pending.rtp);
-            pipeline.start().catch((e) => log.error({ err: e, chanId: pending.chanId }, "VoicePipeline error"));
-          }
         } catch (e) {
           log.error({ err: e, chanId, bridgeId: pending.bridgeId }, "addChannel (ExternalMedia) failed");
         }

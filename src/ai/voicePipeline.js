@@ -45,19 +45,25 @@ export class VoicePipeline {
     this._bargeInAllowed = false;
   }
 
+  /**
+   * Appelé par RtpServer pour chaque paquet audio (pipeline actif).
+   * @param {Buffer} payloadBytes
+   */
+  handleAudio(payloadBytes) {
+    if (!this._greetingPlayed && this.rtpServer.remote) {
+      this._greetingPlayed = true;
+      this._playResponse("Bonjour. Dites-moi comment je peux vous aider.");
+    }
+    if (this._playing && this._bargeInAllowed && hasVoice(payloadBytes)) {
+      this._bargeInRequested = true;
+      this.rtpServer.stopPlayback();
+      this._playing = false;
+    }
+    this.stt.sendAudio(payloadBytes);
+  }
+
   async start() {
-    this.rtpServer.onAudio((payloadBytes) => {
-      if (!this._greetingPlayed && this.rtpServer.remote) {
-        this._greetingPlayed = true;
-        this._playResponse("Bonjour. Dites-moi comment je peux vous aider.");
-      }
-      if (this._playing && this._bargeInAllowed && hasVoice(payloadBytes)) {
-        this._bargeInRequested = true;
-        this.rtpServer.stopPlayback();
-        this._playing = false;
-      }
-      this.stt.sendAudio(payloadBytes);
-    });
+    this.rtpServer.setActivePipeline(this);
 
     this.stt.onFinal((text) => {
       log.info({ text }, "STT final");

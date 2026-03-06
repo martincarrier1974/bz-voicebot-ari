@@ -21,14 +21,15 @@ function parseRtpHeader(buffer) {
 }
 
 /**
- * RTP server: reçoit RTP (ulaw) d'Asterisk ExternalMedia, expose onAudio;
+ * RTP server: reçoit RTP (ulaw) d'Asterisk ExternalMedia, envoie à activePipeline.handleAudio;
  * envoie ulaw vers le remote (sendUlawStream) avec queue et stopPlayback.
  */
 export class RtpServer {
   constructor() {
     this.sock = dgram.createSocket("udp4");
     this.remote = null;
-    this.onAudioCallback = null;
+    /** Pipeline actif pour cet appel (audio routé vers lui). */
+    this.activePipeline = null;
     this._playQueue = [];
     this._playIntervalId = null;
     this._seq = 0;
@@ -36,13 +37,15 @@ export class RtpServer {
     this._ssrc = (Math.random() * 0xffffffff) >>> 0;
     this._packetCount = 0;
     this._byteCount = 0;
+    this._sentFirstPacket = false;
   }
 
   /**
-   * @param {(payloadBytes: Buffer) => void} cb
+   * Définit le pipeline actif (un appel = un pipeline). Les paquets RTP sont envoyés à ce pipeline.
+   * @param {{ handleAudio(payload: Buffer): void } | null} pipeline
    */
-  onAudio(cb) {
-    this.onAudioCallback = cb;
+  setActivePipeline(pipeline) {
+    this.activePipeline = pipeline;
   }
 
   setRemote(rinfo) {
@@ -62,7 +65,7 @@ export class RtpServer {
       this._byteCount += msg.length - RTP_HEADER_LEN;
 
       const payload = msg.subarray(RTP_HEADER_LEN);
-      if (payload.length > 0 && this.onAudioCallback) this.onAudioCallback(payload);
+      if (payload.length > 0 && this.activePipeline?.handleAudio) this.activePipeline.handleAudio(payload);
     });
 
     this.sock.bind(env.RTP_LISTEN_PORT, env.RTP_LISTEN_IP, () => {
@@ -102,6 +105,10 @@ export class RtpServer {
     }
     const frame = this._playQueue.shift();
     if (!this.remote) return;
+    if (!this._sentFirstPacket) {
+      this._sentFirstPacket = true;
+      log.info({ to: this.remote }, "RTP first packet sent to Asterisk (voix retour)");
+    }
     const header = Buffer.alloc(RTP_HEADER_LEN);
     header[0] = 0x80;
     header[1] = PCMU_PT;
