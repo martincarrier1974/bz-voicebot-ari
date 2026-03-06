@@ -41,6 +41,8 @@ export class VoicePipeline {
     this._playing = false;
     this._bargeInRequested = false;
     this._greetingPlayed = false;
+    /** Barge-in activé seulement après que le premier TTS (bienvenue) ait été joué. */
+    this._bargeInAllowed = false;
   }
 
   async start() {
@@ -49,7 +51,7 @@ export class VoicePipeline {
         this._greetingPlayed = true;
         this._playResponse("Bonjour. Dites-moi comment je peux vous aider.");
       }
-      if (this._playing && hasVoice(payloadBytes)) {
+      if (this._playing && this._bargeInAllowed && hasVoice(payloadBytes)) {
         this._bargeInRequested = true;
         this.rtpServer.stopPlayback();
         this._playing = false;
@@ -91,6 +93,7 @@ export class VoicePipeline {
       log.error({ err: e }, "TTS speak failed");
     } finally {
       this._playing = false;
+      this._bargeInAllowed = true;
     }
   }
 }
