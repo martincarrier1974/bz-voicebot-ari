@@ -185,6 +185,12 @@ async function main() {
       { key: "default_locale", label: "Langue par défaut", value: "fr-CA" },
       { key: "max_attempts", label: "Nombre maximum d'échecs", value: "2" },
       { key: "default_fallback_extension", label: "Poste fallback", value: "105" },
+      { key: "tts_provider", label: "Provider TTS", value: "deepgram" },
+      { key: "dg_agent_llm_model", label: "Modèle LLM de l'agent", value: "gpt-4o-mini" },
+      { key: "dg_tts_model", label: "Modèle TTS Deepgram", value: "aura-2-agathe-fr" },
+      { key: "elevenlabs_model_id", label: "Modèle ElevenLabs", value: "eleven_turbo_v2_5" },
+      { key: "elevenlabs_voice_id", label: "Voice ID ElevenLabs", value: "" },
+      { key: "elevenlabs_language", label: "Langue ElevenLabs", value: "fr" },
     ],
   });
 }

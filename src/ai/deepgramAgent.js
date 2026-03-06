@@ -96,6 +96,35 @@ function getPrimaryFlow(runtimeConfig) {
   return Array.isArray(runtimeConfig?.flows) && runtimeConfig.flows.length > 0 ? runtimeConfig.flows[0] : null;
 }
 
+function getTtsModelFromRuntime(runtimeConfig) {
+  const runtimeModel = runtimeConfig?.settings?.dg_tts_model;
+  return typeof runtimeModel === "string" && runtimeModel.trim() ? runtimeModel.trim() : null;
+}
+
+function getTtsProviderFromRuntime(runtimeConfig) {
+  const provider = runtimeConfig?.settings?.tts_provider;
+  return typeof provider === "string" && provider.trim() ? provider.trim() : "deepgram";
+}
+
+function getElevenLabsConfigFromRuntime(runtimeConfig) {
+  return {
+    modelId: typeof runtimeConfig?.settings?.elevenlabs_model_id === "string" && runtimeConfig.settings.elevenlabs_model_id.trim()
+      ? runtimeConfig.settings.elevenlabs_model_id.trim()
+      : "eleven_turbo_v2_5",
+    voiceId: typeof runtimeConfig?.settings?.elevenlabs_voice_id === "string" && runtimeConfig.settings.elevenlabs_voice_id.trim()
+      ? runtimeConfig.settings.elevenlabs_voice_id.trim()
+      : "",
+    language: typeof runtimeConfig?.settings?.elevenlabs_language === "string" && runtimeConfig.settings.elevenlabs_language.trim()
+      ? runtimeConfig.settings.elevenlabs_language.trim()
+      : "fr",
+  };
+}
+
+function getLlmModelFromRuntime(runtimeConfig) {
+  const runtimeModel = runtimeConfig?.settings?.dg_agent_llm_model;
+  return typeof runtimeModel === "string" && runtimeModel.trim() ? runtimeModel.trim() : null;
+}
+
 function getFallbackRoute(runtimeConfig, routes) {
   const primaryFlow = getPrimaryFlow(runtimeConfig);
   const flowDestination = primaryFlow?.destinationPost ? routes.find((route) => route.extension === String(primaryFlow.destinationPost)) : null;
@@ -212,6 +241,34 @@ export class DeepgramAgent {
     const transferDescription = this._routes
       .map((route) => `${route.extension} = ${route.serviceName}`)
       .join(", ");
+    const ttsProvider = getTtsProviderFromRuntime(this.runtimeConfig);
+    const ttsModel = getTtsModelFromRuntime(this.runtimeConfig) ?? env.DG_TTS_MODEL ?? "aura-2-agathe-fr";
+    const llmModel = getLlmModelFromRuntime(this.runtimeConfig) ?? env.DG_AGENT_LLM_MODEL ?? "gpt-4o-mini";
+    const elevenLabs = getElevenLabsConfigFromRuntime(this.runtimeConfig);
+    const useElevenLabs = ttsProvider === "eleven_labs" && env.ELEVENLABS_API_KEY && elevenLabs.voiceId;
+    const speak = useElevenLabs
+      ? {
+          provider: {
+            type: "eleven_labs",
+            model_id: elevenLabs.modelId,
+            language: elevenLabs.language,
+          },
+          endpoint: {
+            url: `wss://api.elevenlabs.io/v1/text-to-speech/${elevenLabs.voiceId}/multi-stream-input`,
+            headers: {
+              "xi-api-key": env.ELEVENLABS_API_KEY,
+            },
+          },
+        }
+      : {
+          provider: {
+            type: "deepgram",
+            model: ttsModel,
+          },
+        };
+    if (ttsProvider === "eleven_labs" && !useElevenLabs) {
+      log.warn("ElevenLabs demandé mais configuration incomplète, fallback vers Deepgram");
+    }
     const settings = {
       type: "Settings",
       audio: {
@@ -227,12 +284,7 @@ export class DeepgramAgent {
       },
       agent: {
         language: "fr",
-        speak: {
-          provider: {
-            type: "deepgram",
-            model: env.DG_TTS_MODEL ?? "aura-2-agathe-fr",
-          },
-        },
+        speak,
         listen: {
           provider: {
             type: "deepgram",
@@ -243,7 +295,7 @@ export class DeepgramAgent {
         think: {
           provider: {
             type: "open_ai",
-            model: env.DG_AGENT_LLM_MODEL ?? "gpt-4o-mini",
+            model: llmModel,
           },
           prompt,
           functions: [
