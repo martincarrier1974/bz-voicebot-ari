@@ -20,6 +20,9 @@ const schema = z.object({
   DG_STT_MODEL: z.string().default("nova-2"),
   DG_TTS_MODEL: z.string().default("aura-2-agathe-fr"),
   ELEVENLABS_API_KEY: z.string().optional(),
+  ELEVENLABS_MODEL_ID: z.string().default("eleven_multilingual_v2"),
+  ELEVENLABS_VOICE_ID: z.string().optional(),
+  ELEVENLABS_LANGUAGE: z.string().default("multi"),
 
   /** Utiliser l'agent conversationnel Deepgram (STT + LLM + TTS) au lieu de STT + règles + TTS */
   USE_DEEPGRAM_AGENT: z.coerce.boolean().default(false),

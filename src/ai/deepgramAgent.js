@@ -110,13 +110,13 @@ function getElevenLabsConfigFromRuntime(runtimeConfig) {
   return {
     modelId: typeof runtimeConfig?.settings?.elevenlabs_model_id === "string" && runtimeConfig.settings.elevenlabs_model_id.trim()
       ? runtimeConfig.settings.elevenlabs_model_id.trim()
-      : "eleven_turbo_v2_5",
+      : env.ELEVENLABS_MODEL_ID ?? "eleven_multilingual_v2",
     voiceId: typeof runtimeConfig?.settings?.elevenlabs_voice_id === "string" && runtimeConfig.settings.elevenlabs_voice_id.trim()
       ? runtimeConfig.settings.elevenlabs_voice_id.trim()
-      : "",
+      : env.ELEVENLABS_VOICE_ID ?? "",
     language: typeof runtimeConfig?.settings?.elevenlabs_language === "string" && runtimeConfig.settings.elevenlabs_language.trim()
       ? runtimeConfig.settings.elevenlabs_language.trim()
-      : "fr",
+      : env.ELEVENLABS_LANGUAGE ?? "multi",
   };
 }
 
@@ -267,7 +267,9 @@ export class DeepgramAgent {
           },
         };
     if (ttsProvider === "eleven_labs" && !useElevenLabs) {
-      log.warn("ElevenLabs demandé mais configuration incomplète, fallback vers Deepgram");
+      log.warn(
+        "ElevenLabs demandé mais configuration incomplète (API key ou voice ID manquant dans runtime/.env), fallback vers Deepgram"
+      );
     }
     const settings = {
       type: "Settings",

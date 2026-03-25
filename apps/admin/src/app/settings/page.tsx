@@ -11,8 +11,13 @@ const TTS_MODEL_OPTIONS = [
 ];
 
 const TTS_PROVIDER_OPTIONS = [
-  { value: "deepgram", label: "Deepgram" },
-  { value: "eleven_labs", label: "ElevenLabs" },
+  { value: "eleven_labs", label: "ElevenLabs - recommandé pour une voix plus naturelle" },
+  { value: "deepgram", label: "Deepgram - plus simple, mais souvent plus synthétique" },
+];
+
+const ELEVENLABS_MODEL_OPTIONS = [
+  { value: "eleven_multilingual_v2", label: "Eleven Multilingual v2 - meilleur choix pour naturel + cohérence" },
+  { value: "eleven_turbo_v2_5", label: "Eleven Turbo v2.5 - plus rapide, mais souvent un peu moins naturel" },
 ];
 
 const LLM_MODEL_OPTIONS = [
@@ -31,7 +36,7 @@ const REQUIRED_SETTINGS = [
     id: "required-tts_provider",
     key: "tts_provider",
     label: "Provider TTS",
-    value: "deepgram",
+    value: "eleven_labs",
   },
   {
     id: "required-dg_agent_llm_model",
@@ -49,7 +54,7 @@ const REQUIRED_SETTINGS = [
     id: "required-elevenlabs_model_id",
     key: "elevenlabs_model_id",
     label: "Modèle ElevenLabs",
-    value: "eleven_turbo_v2_5",
+    value: "eleven_multilingual_v2",
   },
   {
     id: "required-elevenlabs_voice_id",
@@ -61,7 +66,7 @@ const REQUIRED_SETTINGS = [
     id: "required-elevenlabs_language",
     key: "elevenlabs_language",
     label: "Langue ElevenLabs",
-    value: "fr",
+    value: "multi",
   },
 ];
 
@@ -98,6 +103,18 @@ export default async function SettingsPage() {
       </Section>
 
       <Section title="Paramètres globaux" description="Ces paramètres servent de base à l’interface et au comportement du système.">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <p className="font-semibold">Réglage recommandé pour une voix québécoise plus naturelle</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-emerald-900">
+            <li>`tts_provider` = `eleven_labs`</li>
+            <li>`elevenlabs_model_id` = `eleven_multilingual_v2`</li>
+            <li>`elevenlabs_language` = `multi`</li>
+            <li>Renseigner un `elevenlabs_voice_id` qui sonne bien en français québécois</li>
+          </ul>
+          <p className="mt-2 text-xs text-emerald-800">
+            Si ElevenLabs n’est pas complètement configuré, le voicebot retombera automatiquement sur Deepgram.
+          </p>
+        </div>
         <div className="space-y-5">
           {editableSettings.map((setting) => (
             <form key={setting.id} action={saveSettingAction} className="rounded-2xl border border-slate-200 p-4">
@@ -108,7 +125,15 @@ export default async function SettingsPage() {
                 <p className="text-sm font-semibold">{setting.label}</p>
                 <p className="text-xs text-slate-500">{setting.key}</p>
                 {setting.key === "elevenlabs_voice_id" ? (
-                  <p className="mt-1 text-xs text-slate-500">Nécessaire seulement si le provider TTS est `ElevenLabs`.</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Nécessaire si le provider TTS est `ElevenLabs`. C’est ce champ qui détermine concrètement la voix entendue.
+                  </p>
+                ) : null}
+                {setting.key === "elevenlabs_model_id" ? (
+                  <p className="mt-1 text-xs text-slate-500">`eleven_multilingual_v2` est le meilleur défaut pour viser une voix plus naturelle.</p>
+                ) : null}
+                {setting.key === "elevenlabs_language" ? (
+                  <p className="mt-1 text-xs text-slate-500">`multi` est généralement le meilleur choix pour ne pas rigidifier l’accent.</p>
                 ) : null}
               </div>
               <div className="flex flex-col gap-3 md:flex-row md:items-center">
@@ -119,6 +144,8 @@ export default async function SettingsPage() {
                     <Select name="value" defaultValue={setting.value} options={LLM_MODEL_OPTIONS} />
                   ) : setting.key === "dg_tts_model" ? (
                     <Select name="value" defaultValue={setting.value} options={TTS_MODEL_OPTIONS} />
+                  ) : setting.key === "elevenlabs_model_id" ? (
+                    <Select name="value" defaultValue={setting.value} options={ELEVENLABS_MODEL_OPTIONS} />
                   ) : setting.key === "elevenlabs_language" ? (
                     <Select name="value" defaultValue={setting.value} options={ELEVENLABS_LANGUAGE_OPTIONS} />
                   ) : (

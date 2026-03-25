@@ -55,6 +55,29 @@ RUNTIME_CONFIG_PATH=runtime/voicebot-config.json
 
 Par défaut, aucune action supplémentaire n’est requise après une publication si le voicebot tourne déjà avec cette version du code.
 
+## Réglage recommandé pour une voix francophone québécoise
+
+Si la voix actuelle sonne trop synthétique, le meilleur résultat ne viendra généralement pas d’un simple changement de prompt.
+
+Réglage conseillé :
+
+- garder **Deepgram** pour la transcription (STT)
+- utiliser **ElevenLabs** pour la voix de sortie (TTS)
+- choisir `eleven_multilingual_v2`
+- laisser `elevenlabs_language=multi`
+- fournir un `ELEVENLABS_VOICE_ID` (ou le régler dans l’admin) correspondant à une voix naturelle qui convient au français québécois
+
+Variables utiles dans `.env` :
+
+```bash
+ELEVENLABS_API_KEY=
+ELEVENLABS_MODEL_ID=eleven_multilingual_v2
+ELEVENLABS_VOICE_ID=
+ELEVENLABS_LANGUAGE=multi
+```
+
+Sans `ELEVENLABS_API_KEY` ou sans `ELEVENLABS_VOICE_ID`, le système retombera automatiquement sur Deepgram.
+
 ## Tester depuis Asterisk
 
 Pour que l’appel atteigne le voicebot, Asterisk doit envoyer le canal en **Stasis** vers l’app nommée comme `ARI_APP` (par défaut `voicebot`).
