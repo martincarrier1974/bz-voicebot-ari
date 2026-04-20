@@ -20,6 +20,8 @@ log.info(
     RTP_target: rtpTarget,
     RTP_LISTEN_PORT: env.RTP_LISTEN_PORT,
     DEEPGRAM: !!env.DEEPGRAM_API_KEY,
+    ELEVENLABS: !!(env.ELEVENLABS_API_KEY && env.ELEVENLABS_VOICE_ID),
+    ELEVENLABS_VOICE_ID: env.ELEVENLABS_VOICE_ID ?? "(non configuré)",
   },
   "Voicebot config (partager ces logs + sortie pendant un appel pour dépannage)"
 );
