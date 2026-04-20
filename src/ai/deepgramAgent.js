@@ -103,7 +103,10 @@ function getTtsModelFromRuntime(runtimeConfig) {
 
 function getTtsProviderFromRuntime(runtimeConfig) {
   const provider = runtimeConfig?.settings?.tts_provider;
-  return typeof provider === "string" && provider.trim() ? provider.trim() : "deepgram";
+  if (typeof provider === "string" && provider.trim()) return provider.trim();
+  // Fallback: utiliser ElevenLabs si configuré dans .env même sans runtimeConfig
+  if (env.ELEVENLABS_API_KEY && env.ELEVENLABS_VOICE_ID) return "eleven_labs";
+  return "deepgram";
 }
 
 function getElevenLabsConfigFromRuntime(runtimeConfig) {
