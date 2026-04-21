@@ -1,7 +1,6 @@
 import WebSocket from "ws";
 import { env } from "../config/env.js";
 import { log } from "../utils/logger.js";
-import { linear16ToMulaw8k } from "../utils/audioConvert.js";
 
 const AGENT_WS_URL = "wss://agent.deepgram.com/v1/agent/converse";
 const KEEP_ALIVE_INTERVAL_MS = 5000;
@@ -216,7 +215,7 @@ export class DeepgramAgent {
     this.ws = null;
     this._settingsApplied = false;
     this._keepAliveId = null;
-    this._outputSampleRate = 24000;
+    this._outputSampleRate = 8000;
     this._firstChunkLogged = false;
     this._transferTriggered = false;
   }
@@ -235,7 +234,7 @@ export class DeepgramAgent {
    */
   _sendSettings() {
     if (this.ws?.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify(this._buildSettings()));
+    const _s = this._buildSettings(); log.info({ settings: JSON.stringify(_s, null, 2) }, "Settings envoyés à Deepgram"); this.ws.send(JSON.stringify(_s));
   }
 
   _buildSettings() {
@@ -248,13 +247,13 @@ export class DeepgramAgent {
     const ttsModel = getTtsModelFromRuntime(this.runtimeConfig) ?? env.DG_TTS_MODEL ?? "aura-2-agathe-fr";
     const llmModel = getLlmModelFromRuntime(this.runtimeConfig) ?? env.DG_AGENT_LLM_MODEL ?? "gpt-4o-mini";
     const elevenLabs = getElevenLabsConfigFromRuntime(this.runtimeConfig);
-    const useElevenLabs = ttsProvider === "eleven_labs" && env.ELEVENLABS_API_KEY && elevenLabs.voiceId;
+    const useElevenLabs = !!(env.ELEVENLABS_API_KEY && env.ELEVENLABS_VOICE_ID); // ElevenLabs géré séparément via REST streaming
     const speak = useElevenLabs
       ? {
           provider: {
             type: "eleven_labs",
             model_id: elevenLabs.modelId,
-            language: elevenLabs.language,
+            language_code: "fr",
           },
           endpoint: {
             url: `wss://api.elevenlabs.io/v1/text-to-speech/${elevenLabs.voiceId}/multi-stream-input`,
@@ -282,9 +281,8 @@ export class DeepgramAgent {
           sample_rate: 8000,
         },
         output: {
-          encoding: "linear16",
-          sample_rate: 24000,
-          container: "none",
+          encoding: "mulaw",
+          sample_rate: 8000,
         },
       },
       agent: {
@@ -364,14 +362,13 @@ export class DeepgramAgent {
           }
         }
         if (isBuffer && this._settingsApplied && data.length > 0 && this.onAgentAudio) {
-          const mulaw8k = linear16ToMulaw8k(Buffer.from(data), this._outputSampleRate);
-          if (mulaw8k.length > 0) {
-            if (!this._firstChunkLogged) {
-              this._firstChunkLogged = true;
-              log.info({ linear16: data.length, mulaw8k: mulaw8k.length }, "Agent audio: first chunk (linear16→mulaw)");
-            }
-            this.onAgentAudio(mulaw8k);
+                  if (data.length > 0) {
+          if (!this._firstChunkLogged) {
+            this._firstChunkLogged = true;
+            log.info({ mulaw8k: data.length }, "Agent audio: first chunk (mulaw direct)");
           }
+          this.onAgentAudio(Buffer.from(data));
+        }
           return;
         }
         if (isBuffer) {
