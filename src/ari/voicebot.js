@@ -205,14 +205,44 @@ export async function startVoicebot() {
 
     client.start(env.ARI_APP);
     log.info({ app: env.ARI_APP }, "ARI Voicebot started (abonné à Stasis)");
-    client.on("StasisEnd", (event, channel) => {
+    client.on("StasisEnd", async (event, channel) => {
       const chanId = channel?.id;
       const pipeline = activePipelines.get(chanId);
       if (pipeline?.close) {
         pipeline.close();
         activePipelines.delete(chanId);
       }
-      log.info({ chanId: channel?.id }, "StasisEnd");
+      
+      // Nettoyage des ressources résiduelles
+      try {
+        // Fermer l'ExternalMedia s'il existe encore
+        if (ourExternalMediaIds && ourExternalMediaIds.size > 0) {
+          for (const extId of ourExternalMediaIds) {
+            try {
+              await client.channels.hangup({ channelId: extId });
+              ourExternalMediaIds.delete(extId);
+            } catch (e) {
+              // Ignorer si déjà fermé
+            }
+          }
+        }
+        
+        // Fermer les bridges vides
+        const bridges = await client.bridges.list();
+        for (const bridge of bridges) {
+          if (bridge.bridge_type === "mixing" && (!bridge.channels || bridge.channels.length === 0)) {
+            try {
+              await client.bridges.destroy({ bridgeId: bridge.id });
+            } catch (e) {
+              // Ignorer si déjà fermé
+            }
+          }
+        }
+      } catch (err) {
+        // Ignorer les erreurs de nettoyage
+      }
+      
+      log.info({ chanId }, "StasisEnd (ressources nettoyées)");
     });
   });
 }
