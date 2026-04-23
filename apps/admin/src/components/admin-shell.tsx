@@ -1,16 +1,15 @@
-import { LayoutDashboard, MessageSquareText, Network, Route, PlayCircle, Settings, Shapes, PhoneCall } from "lucide-react";
 import { logoutAction } from "@/app/actions";
 import { MobileNav, SidebarNav } from "@/components/sidebar-nav";
 
 const navigation = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/prompts", label: "Prompts", icon: MessageSquareText },
-  { href: "/contexts", label: "Contextes", icon: Shapes },
-  { href: "/flows", label: "Flows", icon: Network },
-  { href: "/routes", label: "Routes", icon: Route },
-  { href: "/simulator", label: "Simulateur", icon: PlayCircle },
-  { href: "/live-calls", label: "Appels en direct", icon: PhoneCall },
-  { href: "/settings", label: "Paramètres", icon: Settings },
+  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
+  { href: "/prompts", label: "Prompts", icon: "prompts" },
+  { href: "/contexts", label: "Contextes", icon: "contexts" },
+  { href: "/flows", label: "Flows", icon: "flows" },
+  { href: "/routes", label: "Routes", icon: "routes" },
+  { href: "/simulator", label: "Simulateur", icon: "simulator" },
+  { href: "/live-calls", label: "Appels en direct", icon: "live-calls" },
+  { href: "/settings", label: "Paramètres", icon: "settings" },
 ];
 
 export function AdminShell({

@@ -3,8 +3,20 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { LucideIcon } from "lucide-react";
-import { LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, MessageSquareText, Network, Route, PlayCircle, Settings, Shapes, PhoneCall, LogOut, Menu, X } from "lucide-react";
+
+const ICONS = {
+  dashboard: LayoutDashboard,
+  prompts: MessageSquareText,
+  contexts: Shapes,
+  flows: Network,
+  routes: Route,
+  simulator: PlayCircle,
+  "live-calls": PhoneCall,
+  settings: Settings,
+} as const;
+
+type NavIconKey = keyof typeof ICONS;
 
 function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -15,7 +27,7 @@ export function SidebarNav({
   navigation,
   logoutAction,
 }: {
-  navigation: { href: string; label: string; icon: LucideIcon }[];
+  navigation: { href: string; label: string; icon: NavIconKey }[];
   logoutAction: (formData: FormData) => void | Promise<void>;
 }) {
   const pathname = usePathname();
@@ -30,7 +42,7 @@ export function SidebarNav({
 
       <nav className="space-y-1">
         {navigation.map((item) => {
-          const Icon = item.icon;
+          const Icon = ICONS[item.icon];
           const active = isActivePath(pathname, item.href);
           return (
             <Link
@@ -75,7 +87,7 @@ export function MobileNav({
   logoutAction,
   title,
 }: {
-  navigation: { href: string; label: string; icon: LucideIcon }[];
+  navigation: { href: string; label: string; icon: NavIconKey }[];
   logoutAction: (formData: FormData) => void | Promise<void>;
   title: string;
 }) {

@@ -1,4 +1,4 @@
-import { deleteFlowAction, saveFlowAction } from '@/app/actions';
+import { saveFlowAction } from '@/app/actions';
 import { AdminShell } from '@/components/admin-shell';
 import { requireAuth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -40,7 +40,7 @@ export default async function FlowDiagramPage() {
   return (
     <AdminShell
       title="Diagramme des Flows"
-      subtitle="Visualisez les parcours d'appel et leurs transitions"
+      subtitle="Visualisez les parcours d’appel et leurs transitions"
     >
       <div style={{ padding: '2rem' }}>
         {/* En-tête */}
@@ -110,7 +110,7 @@ export default async function FlowDiagramPage() {
                       <strong>Accueil:</strong>
                     </div>
                     <div style={{ fontSize: '0.95rem', color: '#1f2937' }}>
-                      "{welcomePreview}"
+                      <span>&quot;{welcomePreview}&quot;</span>
                     </div>
                   </div>
                 </div>
@@ -275,7 +275,7 @@ export default async function FlowDiagramPage() {
                   Ajouter un Flow
                 </div>
                 <div style={{ fontSize: '0.875rem', color: '#6B7280', marginTop: '0.25rem' }}>
-                  Créer un nouveau parcours d'appel
+                  Créer un nouveau parcours d’appel
                 </div>
               </div>
             </button>
