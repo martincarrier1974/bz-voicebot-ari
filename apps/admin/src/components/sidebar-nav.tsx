@@ -16,7 +16,7 @@ const ICONS = {
   settings: Settings,
 } as const;
 
-type NavIconKey = keyof typeof ICONS;
+export type NavIconKey = keyof typeof ICONS;
 
 function isActivePath(pathname: string, href: string) {
   if (href === "/") return pathname === "/";

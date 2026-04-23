@@ -1,7 +1,8 @@
 import { logoutAction } from "@/app/actions";
 import { MobileNav, SidebarNav } from "@/components/sidebar-nav";
+import type { NavIconKey } from "@/components/sidebar-nav";
 
-const navigation = [
+const navigation: { href: string; label: string; icon: NavIconKey }[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
   { href: "/prompts", label: "Prompts", icon: "prompts" },
   { href: "/contexts", label: "Contextes", icon: "contexts" },
