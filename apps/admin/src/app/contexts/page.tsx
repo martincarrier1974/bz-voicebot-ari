@@ -3,6 +3,7 @@ import { AdminShell, Section } from "@/components/admin-shell";
 import { Checkbox, DeleteButton, SaveButton, TextArea, TextInput } from "@/components/forms";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { Context } from "@prisma/client";
 
 export default async function ContextsPage() {
   await requireAuth();
@@ -26,7 +27,7 @@ export default async function ContextsPage() {
         </Section>
 
         <div className="space-y-6">
-          {contexts.map((context) => (
+          {contexts.map((context: Context) => (
             <Section key={context.id} title={context.name} description={context.description}>
               <form action={saveContextAction} className="space-y-4">
                 <input type="hidden" name="id" value={context.id} />
