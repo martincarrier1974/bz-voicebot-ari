@@ -18,7 +18,7 @@ if (!AdapterCtor) {
 
 const adapter = new AdapterCtor({
   url: process.env.DATABASE_URL || "file:./dev.db",
-}) as unknown as any;
+}) as unknown as unknown;
 
 export const prisma =
   globalForPrisma.prisma ??
