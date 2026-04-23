@@ -209,7 +209,6 @@ export async function deleteFlowIntentAction(formData: FormData) {
 }
 
 export async function saveSettingAction(formData: FormData) {
-  const id = String(formData.get("id") || "");
   const data = {
     key: String(formData.get("key") || ""),
     label: String(formData.get("label") || ""),

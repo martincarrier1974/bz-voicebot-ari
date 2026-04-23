@@ -30,7 +30,7 @@ export default async function LiveCallsPage() {
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm text-slate-500">Dernière lecture : {lastUpdated}</p>
             <Link
-              href={`/live-calls?refresh=${Date.now()}`}
+              href={`/live-calls?refresh=${snapshot.updatedAt}`}
               className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-700"
             >
               Rafraîchir

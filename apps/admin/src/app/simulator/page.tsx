@@ -1,5 +1,5 @@
 import { AdminShell, Section } from "@/components/admin-shell";
-import { Select } from "@/components/forms";
+import { Field, SaveButton, Select, TextArea } from "@/components/forms";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { simulateFlow } from "@/lib/simulator";
@@ -36,41 +36,38 @@ export default async function SimulatorPage({
       <div className="grid gap-6 xl:grid-cols-[1fr_1.4fr]">
         <Section title="Entrée de simulation" description="Saisir une phrase utilisateur et choisir le flow à tester.">
           <form className="space-y-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Flow</label>
+            <Field label="Flow" hint="Choisis le flow à tester">
               <Select
                 name="flowId"
                 defaultValue={selectedFlow?.id}
                 options={flows.map((flow) => ({ value: flow.id, label: flow.name }))}
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Phrase utilisateur</label>
-              <textarea
+            </Field>
+
+            <Field label="Phrase utilisateur" hint="Ce que le client dit">
+              <TextArea
                 name="utterance"
                 rows={5}
                 defaultValue={utterance}
                 placeholder="Exemple : J'ai un problème avec mon internet."
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-sky-500"
+                required
               />
+            </Field>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Tentative" hint="Simule une relance">
+                <Select
+                  name="attempt"
+                  defaultValue={String(attempt)}
+                  options={[
+                    { value: "1", label: "1re tentative" },
+                    { value: "2", label: "2e tentative" },
+                  ]}
+                />
+              </Field>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Tentative</label>
-              <select
-                name="attempt"
-                defaultValue={String(attempt)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-sky-500"
-              >
-                <option value="1">1re tentative</option>
-                <option value="2">2e tentative</option>
-              </select>
-            </div>
-            <button
-              type="submit"
-              className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-700"
-            >
-              Simuler
-            </button>
+
+            <SaveButton label="Simuler" />
           </form>
         </Section>
 

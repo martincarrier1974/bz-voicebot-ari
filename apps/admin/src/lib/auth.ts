@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 export const ADMIN_COOKIE_NAME = "bz_admin_session";
 const ADMIN_COOKIE_VALUE = "authenticated";
 
-function useSecureCookie() {
+function shouldUseSecureCookie() {
   return process.env.ADMIN_COOKIE_SECURE === "true";
 }
 
@@ -26,7 +26,7 @@ export async function createSession() {
   cookieStore.set(ADMIN_COOKIE_NAME, ADMIN_COOKIE_VALUE, {
     httpOnly: true,
     sameSite: "lax",
-    secure: useSecureCookie(),
+    secure: shouldUseSecureCookie(),
     path: "/",
     maxAge: 60 * 60 * 8,
   });
@@ -37,7 +37,7 @@ export async function clearSession() {
   cookieStore.set(ADMIN_COOKIE_NAME, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: useSecureCookie(),
+    secure: shouldUseSecureCookie(),
     path: "/",
     maxAge: 0,
   });

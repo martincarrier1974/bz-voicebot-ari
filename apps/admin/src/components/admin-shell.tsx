@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { LayoutDashboard, MessageSquareText, Network, Route, PlayCircle, Settings, Shapes, PhoneCall } from "lucide-react";
 import { logoutAction } from "@/app/actions";
+import { MobileNav, SidebarNav } from "@/components/sidebar-nav";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -26,37 +26,11 @@ export function AdminShell({
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
         <aside className="hidden w-72 border-r border-slate-200 bg-white px-5 py-6 lg:block">
-          <div className="mb-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">BZ Telecom</p>
-            <h1 className="mt-2 text-2xl font-semibold">Admin</h1>
-            <p className="mt-1 text-sm text-slate-500">Panneau d’administration vocal</p>
-          </div>
-          <nav className="space-y-2">
-            {navigation.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <form action={logoutAction} className="mt-10">
-            <button
-              type="submit"
-              className="w-full rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              Déconnexion
-            </button>
-          </form>
+          <SidebarNav navigation={navigation} logoutAction={logoutAction} />
         </aside>
 
         <main className="flex-1 px-4 py-6 md:px-8">
+          <MobileNav navigation={navigation} logoutAction={logoutAction} title={title} />
           <header className="mb-6 rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm">
             <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
               <div>
