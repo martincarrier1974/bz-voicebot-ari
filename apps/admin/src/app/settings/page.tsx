@@ -86,7 +86,7 @@ export default async function SettingsPage() {
         title="Publication runtime"
         description="Publie la configuration active dans un fichier JSON partagé avec le voicebot."
       >
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="space-y-1 text-sm text-slate-700">
               <p className="font-semibold">Fichier publié : `runtime/voicebot-config.json`</p>
@@ -103,15 +103,15 @@ export default async function SettingsPage() {
       </Section>
 
       <Section title="Paramètres globaux" description="Ces paramètres servent de base à l’interface et au comportement du système.">
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-100">
           <p className="font-semibold">Réglage recommandé pour une voix québécoise plus naturelle</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-emerald-900">
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-emerald-900 dark:text-emerald-100/90">
             <li>`tts_provider` = `eleven_labs`</li>
             <li>`elevenlabs_model_id` = `eleven_multilingual_v2`</li>
             <li>`elevenlabs_language` = `multi`</li>
             <li>Renseigner un `elevenlabs_voice_id` qui sonne bien en français québécois</li>
           </ul>
-          <p className="mt-2 text-xs text-emerald-800">
+          <p className="mt-2 text-xs text-emerald-800 dark:text-emerald-100/70">
             Si ElevenLabs n’est pas complètement configuré, le voicebot retombera automatiquement sur Deepgram.
           </p>
         </div>

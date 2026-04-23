@@ -60,7 +60,7 @@ export default async function PromptsPage() {
                 <p className="mb-2 text-sm font-medium text-slate-700">Historique simple</p>
                 <div className="space-y-2">
                   {prompt.versions.map((version) => (
-                    <div key={version.id} className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600">
+                    <div key={version.id} className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-300">
                       <div className="mb-1 font-medium">
                         {new Date(version.createdAt).toLocaleString("fr-CA")} {version.note ? `• ${version.note}` : ""}
                       </div>

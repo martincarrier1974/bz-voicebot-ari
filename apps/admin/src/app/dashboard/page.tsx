@@ -49,23 +49,23 @@ export default async function DashboardPage() {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[2fr_1fr]">
         <Section title="Derniers flows" description="Flows récemment modifiés et leurs destinations par défaut.">
-          <div className="overflow-hidden rounded-2xl border border-slate-200">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50">
+          <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-white/10">
+            <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-white/10">
+              <thead className="bg-slate-50 dark:bg-white/5">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Flow</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Contexte</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Intentions</th>
-                  <th className="px-4 py-3 text-left font-medium text-slate-600">Destination</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-200">Flow</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-200">Contexte</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-200">Intentions</th>
+                  <th className="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-200">Destination</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 bg-white">
+              <tbody className="divide-y divide-slate-200 bg-white dark:divide-white/10 dark:bg-transparent">
                 {flows.map((flow) => (
-                  <tr key={flow.id}>
+                  <tr key={flow.id} className="dark:hover:bg-white/5">
                     <td className="px-4 py-3 font-medium">{flow.name}</td>
-                    <td className="px-4 py-3 text-slate-600">{flow.context?.name ?? "Aucun"}</td>
-                    <td className="px-4 py-3 text-slate-600">{flow.intents.length}</td>
-                    <td className="px-4 py-3 text-slate-600">{flow.destinationLabel} ({flow.destinationPost})</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{flow.context?.name ?? "Aucun"}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{flow.intents.length}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{flow.destinationLabel} ({flow.destinationPost})</td>
                   </tr>
                 ))}
               </tbody>
@@ -74,7 +74,7 @@ export default async function DashboardPage() {
         </Section>
 
         <Section title="Règles clés" description="Résumé fonctionnel de la logique actuelle.">
-          <ul className="space-y-3 text-sm text-slate-700">
+          <ul className="space-y-3 text-sm text-slate-700 dark:text-slate-200">
             <li>Support technique : transfert vers le poste 101.</li>
             <li>Ventes / soumission : transfert vers le poste 102.</li>
             <li>Réception / autres : transfert vers le poste 105.</li>
