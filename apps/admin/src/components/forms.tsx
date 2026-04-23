@@ -4,10 +4,10 @@ import * as React from "react";
 import { useFormStatus } from "react-dom";
 
 const inputBase =
-  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/15 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500";
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-500/15 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:bg-slate-900/60 dark:disabled:text-slate-400";
 
-const labelBase = "text-sm font-semibold text-slate-800";
-const helpBase = "text-xs text-slate-500";
+const labelBase = "text-sm font-semibold text-slate-800 dark:text-slate-100";
+const helpBase = "text-xs text-slate-500 dark:text-slate-400";
 
 export function Field({
   label,

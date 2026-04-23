@@ -1,5 +1,6 @@
 import * as BetterSqlite3Adapter from "@prisma/adapter-better-sqlite3";
 import { PrismaClient } from "@prisma/client";
+import type { PrismaClientOptions } from "@prisma/client/runtime/library";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -18,7 +19,7 @@ if (!AdapterCtor) {
 
 const adapter = new AdapterCtor({
   url: process.env.DATABASE_URL || "file:./dev.db",
-}) as unknown as any;
+}) as unknown as PrismaClientOptions["adapter"];
 
 export const prisma =
   globalForPrisma.prisma ??

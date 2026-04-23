@@ -35,9 +35,9 @@ export function SidebarNav({
   return (
     <div className="flex h-full flex-col">
       <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">BZ Telecom</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600 dark:text-sky-400">BZ Telecom</p>
         <h1 className="mt-2 text-2xl font-semibold">Admin</h1>
-        <p className="mt-1 text-sm text-slate-500">Panneau d’administration vocal</p>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Panneau d’administration vocal</p>
       </div>
 
       <nav className="space-y-1">
@@ -51,16 +51,23 @@ export function SidebarNav({
               aria-current={active ? "page" : undefined}
               className={[
                 "group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition",
-                active ? "bg-sky-50 text-sky-900" : "text-slate-700 hover:bg-slate-100",
+                active
+                  ? "bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
+                  : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-900",
               ].join(" ")}
             >
               <span
                 className={[
                   "absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full transition",
-                  active ? "bg-sky-600" : "bg-transparent group-hover:bg-slate-200",
+                  active ? "bg-sky-600 dark:bg-sky-400" : "bg-transparent group-hover:bg-slate-200 dark:group-hover:bg-slate-700",
                 ].join(" ")}
               />
-              <Icon className={["h-4 w-4", active ? "text-sky-700" : "text-slate-500"].join(" ")} />
+              <Icon
+                className={[
+                  "h-4 w-4",
+                  active ? "text-sky-700 dark:text-sky-200" : "text-slate-500 dark:text-slate-400",
+                ].join(" ")}
+              />
               <span className="truncate">{item.label}</span>
             </Link>
           );
@@ -71,7 +78,7 @@ export function SidebarNav({
         <form action={logoutAction}>
           <button
             type="submit"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
           >
             <LogOut className="h-4 w-4" />
             Déconnexion
