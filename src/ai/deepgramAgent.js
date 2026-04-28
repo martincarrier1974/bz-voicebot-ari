@@ -542,11 +542,12 @@ export class DeepgramAgent {
     const normalizedText = normalizeText(text);
     if (!normalizedText) return null;
 
-    return this._routes.find((route) => {
-      if (normalizedText.includes(`poste ${normalizeText(route.extension)}`)) return true;
-      if (normalizedText.includes(normalizeText(route.serviceName))) return true;
-      return Array.isArray(route.keywords) && route.keywords.some((keyword) => normalizedText.includes(normalizeText(keyword)));
-    }) ?? null;
+    const ranked = this._routes
+      .map((route) => ({ route, score: getRouteMatchScore(route, text) }))
+      .filter((item) => item.score >= 70)
+      .sort((a, b) => b.score - a.score);
+
+    return ranked[0]?.route ?? null;
   }
 
   _resolveTransferRoute(args) {
