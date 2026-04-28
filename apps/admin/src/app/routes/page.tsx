@@ -9,7 +9,7 @@ export default async function RoutesPage() {
   const routes = await prisma.routeRule.findMany({ orderBy: { priority: "asc" } });
 
   return (
-    <AdminShell title="Routes d’appel" subtitle="Configurer les destinations, mots-clés, priorité et état actif/inactif.">
+    <AdminShell title="Routes d’appel" subtitle="Configurer les destinations, mots-clés, priorité et état actif/inactif." showPublishButton={true}>
       <div className="grid gap-6 xl:grid-cols-[1fr_2fr]">
         <Section title="Nouvelle route">
           <form action={saveRouteAction} className="space-y-4">

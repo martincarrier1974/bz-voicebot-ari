@@ -16,6 +16,7 @@ export default async function PromptsPage() {
     <AdminShell
       title="Gestion des prompts"
       subtitle="Créer, modifier, activer et versionner les prompts utilisés par l’agent vocal."
+      showPublishButton={true}
     >
       <div className="grid gap-6 xl:grid-cols-[1fr_2fr]">
         <Section title="Nouveau prompt" description="Ajouter un prompt ou sous-prompt par scénario.">

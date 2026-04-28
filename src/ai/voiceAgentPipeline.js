@@ -16,9 +16,22 @@ function getDefaultRoutes() {
   ];
 }
 
+function getDirectoryRoutesFromRuntimeConfig(runtimeConfig) {
+  const contacts = Array.isArray(runtimeConfig?.directoryContacts) ? runtimeConfig.directoryContacts : [];
+  return contacts
+    .filter((contact) => contact?.extension && contact?.name)
+    .map((contact) => ({
+      serviceName: String(contact.name).trim(),
+      extension: String(contact.extension).trim(),
+      keywords: [...new Set([contact.name, ...(Array.isArray(contact.aliases) ? contact.aliases : [])].map((item) => String(item || "").trim()).filter(Boolean))],
+      priority: 500,
+    }));
+}
+
 function getRoutesFromRuntimeConfig(runtimeConfig) {
   const routes = Array.isArray(runtimeConfig?.routes) ? runtimeConfig.routes : [];
-  const normalized = routes
+  const baseRoutes = routes.length > 0 ? routes : getDefaultRoutes();
+  const normalized = baseRoutes
     .filter((route) => route?.extension)
     .map((route) => ({
       serviceName: String(route.serviceName || `Poste ${route.extension}`).trim(),
@@ -30,7 +43,7 @@ function getRoutesFromRuntimeConfig(runtimeConfig) {
     }))
     .sort((a, b) => a.priority - b.priority);
 
-  return normalized.length > 0 ? normalized : getDefaultRoutes();
+  return [...normalized, ...getDirectoryRoutesFromRuntimeConfig(runtimeConfig)];
 }
 
 function normalizeText(value) {

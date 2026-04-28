@@ -32,6 +32,7 @@ export default async function SimulatorPage({
     <AdminShell
       title="Simulateur"
       subtitle="Tester un flow sans appeler le système réel et visualiser le chemin logique."
+      showPublishButton={true}
     >
       <div className="grid gap-6 xl:grid-cols-[1fr_1.4fr]">
         <Section title="Entrée de simulation" description="Saisir une phrase utilisateur et choisir le flow à tester.">

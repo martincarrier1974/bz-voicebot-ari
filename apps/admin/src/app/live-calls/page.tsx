@@ -15,6 +15,7 @@ export default async function LiveCallsPage() {
     <AdminShell
       title="Appels en direct"
       subtitle="Vue en temps réel de l’état mémoire des appels gérés par le voicebot."
+      showPublishButton={true}
     >
       <div className="grid gap-4 md:grid-cols-3">
         <Card title="Appels actifs" value={snapshot.count} hint="Sessions actuellement suivies par le voicebot" />

@@ -1,320 +1,352 @@
-import { saveFlowAction } from '@/app/actions';
-import { AdminShell } from '@/components/admin-shell';
-import { requireAuth } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import {
+  deleteFlowAction,
+  deleteFlowIntentAction,
+  saveFlowAction,
+  saveFlowIntentAction,
+} from "@/app/actions";
+import { AdminShell, Section } from "@/components/admin-shell";
+import {
+  Checkbox,
+  DeleteButton,
+  Field,
+  SaveButton,
+  Select,
+  TextArea,
+  TextInput,
+} from "@/components/forms";
+import { requireAuth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 
-export default async function FlowDiagramPage() {
+export default async function FlowsPage() {
   await requireAuth();
 
-  const flows = await prisma.flow.findMany({
-    include: {
-      context: true,
-      intents: {
-        include: {
-          routeRule: true
+  const [flows, contexts, routes] = await Promise.all([
+    prisma.flow.findMany({
+      include: {
+        context: true,
+        intents: {
+          include: {
+            routeRule: true,
+          },
+          orderBy: { priority: "asc" },
         },
-        orderBy: { priority: 'asc' }
       },
-    },
-    orderBy: { name: 'asc' },
-  });
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.context.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.routeRule.findMany({
+      orderBy: [{ priority: "asc" }, { serviceName: "asc" }],
+    }),
+  ]);
 
-  // Couleurs pour différents types de flows
-  const flowColors = {
-    principal: { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' }, // Bleu
-    technique: { bg: '#dcfce7', border: '#22c55e', text: '#166534' }, // Vert
-    ventes: { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' }, // Orange
-    support: { bg: '#fce7f3', border: '#ec4899', text: '#9d174d' }, // Rose
-    default: { bg: '#f3f4f6', border: '#9ca3af', text: '#4b5563' }, // Gris
-  };
+  const contextOptions = contexts.map((context) => ({
+    value: context.id,
+    label: context.name,
+  }));
 
-  const getFlowColor = (flowName: string) => {
-    const name = flowName.toLowerCase();
-    if (name.includes('principal')) return flowColors.principal;
-    if (name.includes('technique') || name.includes('support')) return flowColors.technique;
-    if (name.includes('vente') || name.includes('commercial')) return flowColors.ventes;
-    if (name.includes('support')) return flowColors.support;
-    return flowColors.default;
-  };
+  const routeOptions = routes.map((route) => ({
+    value: route.id,
+    label: `${route.serviceName} (poste ${route.extension})`,
+  }));
 
   return (
     <AdminShell
-      title="Diagramme des Flows"
-      subtitle="Visualisez les parcours d’appel et leurs transitions"
+      title="Flows"
+      subtitle="Configurer les parcours d’appel, leurs messages et les intentions de transfert."
+      showPublishButton={true}
     >
-      <div style={{ padding: '2rem' }}>
-        {/* En-tête */}
-        <div style={{ marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#111827' }}>
-            Workflow des Appels
-          </h1>
-          <p style={{ color: '#6B7280', marginTop: '0.5rem' }}>
-            {flows.length} flows interconnectés • Cliquez sur une tuile pour voir les détails
-          </p>
-        </div>
+      <div className="grid gap-6 xl:grid-cols-[1fr_2fr]">
+        <Section title="Nouveau flow" description="Créer un nouveau parcours avec une destination par défaut.">
+          <form action={saveFlowAction} className="space-y-4">
+            <Field label="Nom du flow">
+              <TextInput name="name" placeholder="Flow principal BZ Telecom" required />
+            </Field>
 
-        {/* Grille de flows */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', 
-          gap: '1.5rem',
-          position: 'relative'
-        }}>
-          {flows.map((flow, index) => {
-            const colors = getFlowColor(flow.name);
-            const welcomePreview = flow.welcomeMessage 
-              ? (flow.welcomeMessage.length > 60 
-                  ? flow.welcomeMessage.substring(0, 60) + '...' 
-                  : flow.welcomeMessage)
-              : 'Pas de message d\'accueil';
+            <Field label="Contexte" hint="Optionnel">
+              <Select name="contextId" options={contextOptions} />
+            </Field>
 
-            return (
-              <div 
-                key={flow.id}
-                style={{
-                  backgroundColor: colors.bg,
-                  border: `2px solid ${colors.border}`,
-                  borderRadius: '0.75rem',
-                  padding: '1.5rem',
-                  position: 'relative',
-                  minHeight: '220px'
-                }}
-              >
-                {/* En-tête de la tuile */}
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <div style={{
-                      width: '12px',
-                      height: '12px',
-                      borderRadius: '50%',
-                      backgroundColor: flow.isActive ? '#10b981' : '#9ca3af'
-                    }}></div>
-                    <h3 style={{ 
-                      fontWeight: 'bold', 
-                      fontSize: '1.25rem',
-                      color: colors.text
-                    }}>
-                      {flow.name}
-                    </h3>
-                  </div>
-                  
-                  {/* Description du flow */}
-                  <div style={{ 
-                    backgroundColor: 'rgba(255,255,255,0.7)', 
-                    padding: '0.75rem',
-                    borderRadius: '0.5rem',
-                    marginBottom: '1rem',
-                    border: '1px solid rgba(0,0,0,0.1)'
-                  }}>
-                    <div style={{ fontSize: '0.875rem', color: '#4b5563', marginBottom: '0.25rem' }}>
-                      <strong>Accueil:</strong>
-                    </div>
-                    <div style={{ fontSize: '0.95rem', color: '#1f2937' }}>
-                      <span>&quot;{welcomePreview}&quot;</span>
-                    </div>
-                  </div>
-                </div>
+            <Field label="Message d’accueil">
+              <TextArea
+                name="welcomeMessage"
+                rows={3}
+                placeholder="Bonjour, bienvenue chez BZ Telecom. Comment puis-je vous aider aujourd’hui ?"
+                required
+              />
+            </Field>
 
-                {/* Intentions/options */}
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ fontSize: '0.875rem', fontWeight: '500', color: colors.text, marginBottom: '0.5rem' }}>
-                    Options disponibles:
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {flow.intents.slice(0, 3).map((intent, idx) => (
-                      <div 
-                        key={intent.id}
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          padding: '0.5rem 0.75rem',
-                          backgroundColor: 'white',
-                          borderRadius: '0.375rem',
-                          border: '1px solid #e5e7eb'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span style={{ 
-                            width: '20px', 
-                            height: '20px', 
-                            borderRadius: '50%', 
-                            backgroundColor: '#3b82f6',
-                            color: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '0.75rem'
-                          }}>
-                            {idx + 1}
-                          </span>
-                          <span style={{ fontSize: '0.875rem' }}>{intent.label}</span>
-                        </div>
-                        <div style={{ 
-                          fontSize: '0.75rem', 
-                          backgroundColor: '#f3f4f6',
-                          padding: '0.25rem 0.5rem',
-                          borderRadius: '0.25rem',
-                          color: '#6B7280'
-                        }}>
-                          → poste {intent.destinationPost || '--'}
-                        </div>
-                      </div>
-                    ))}
-                    
-                    {flow.intents.length > 3 && (
-                      <div style={{ 
-                        fontSize: '0.875rem', 
-                        color: '#6B7280',
-                        textAlign: 'center',
-                        padding: '0.5rem'
-                      }}>
-                        + {flow.intents.length - 3} autres options
-                      </div>
-                    )}
-                  </div>
-                </div>
+            <Field label="Prompt de silence">
+              <TextArea
+                name="silencePrompt"
+                rows={2}
+                placeholder="Je suis toujours là. Pouvez-vous répéter, s’il vous plaît ?"
+                required
+              />
+            </Field>
 
-                {/* Statut et actions */}
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  borderTop: '1px solid rgba(0,0,0,0.1)',
-                  paddingTop: '1rem'
-                }}>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <span style={{ 
-                      fontSize: '0.75rem',
-                      backgroundColor: flow.isActive ? '#10b981' : '#9ca3af',
-                      color: 'white',
-                      padding: '0.25rem 0.5rem',
-                      borderRadius: '0.25rem'
-                    }}>
-                      {flow.isActive ? 'ACTIF' : 'INACTIF'}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: '#6B7280' }}>
-                      {flow.intents.length} options
-                    </span>
-                  </div>
-                  
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button style={{ 
-                      padding: '0.25rem 0.5rem',
-                      fontSize: '0.75rem',
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '0.25rem'
-                    }}>
-                      Ouvrir
-                    </button>
-                  </div>
-                </div>
+            <Field label="Prompt ambigu">
+              <TextArea
+                name="ambiguousPrompt"
+                rows={2}
+                placeholder="Je veux être certain de bien comprendre votre demande."
+                required
+              />
+            </Field>
 
-                {/* Indicateur de connexion (pour le diagramme) */}
-                {index < flows.length - 1 && (
-                  <div style={{
-                    position: 'absolute',
-                    right: '-1rem',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: '2rem',
-                    height: '2px',
-                    backgroundColor: '#9ca3af'
-                  }}>
-                    <div style={{
-                      position: 'absolute',
-                      right: '-4px',
-                      top: '-3px',
-                      width: '0',
-                      height: '0',
-                      borderTop: '4px solid transparent',
-                      borderBottom: '4px solid transparent',
-                      borderLeft: '6px solid #9ca3af'
-                    }}></div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+            <Field label="Prompt de repli">
+              <TextArea
+                name="fallbackPrompt"
+                rows={2}
+                placeholder="Je vais vous transférer vers un agent pour vous aider."
+                required
+              />
+            </Field>
 
-          {/* Tuile "Ajouter un flow" */}
-          <form action={saveFlowAction}>
-            <button 
-              type="submit"
-              style={{
-                width: '100%',
-                height: '100%',
-                minHeight: '220px',
-                border: '2px dashed #d1d5db',
-                borderRadius: '0.75rem',
-                padding: '2rem',
-                backgroundColor: 'transparent',
-                cursor: 'pointer',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '1rem'
-              }}
-            >
-              <div style={{
-                width: '4rem',
-                height: '4rem',
-                backgroundColor: '#dbeafe',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <span style={{ fontSize: '2rem', color: '#2563eb' }}>+</span>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.125rem', fontWeight: '500', color: '#374151' }}>
-                  Ajouter un Flow
-                </div>
-                <div style={{ fontSize: '0.875rem', color: '#6B7280', marginTop: '0.25rem' }}>
-                  Créer un nouveau parcours d’appel
-                </div>
-              </div>
-            </button>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Action finale">
+                <Select
+                  name="finalAction"
+                  required
+                  options={[
+                    { value: "transfer", label: "Transfert" },
+                    { value: "message", label: "Message" },
+                    { value: "hangup", label: "Raccrocher" },
+                  ]}
+                />
+              </Field>
+              <Field label="Nombre max d’échecs">
+                <TextInput name="maxFailedAttempts" defaultValue="2" required inputMode="numeric" />
+              </Field>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Libellé destination">
+                <TextInput name="destinationLabel" placeholder="Réception / Autres" required />
+              </Field>
+              <Field label="Poste destination">
+                <TextInput name="destinationPost" placeholder="105" required inputMode="numeric" />
+              </Field>
+            </div>
+
+            <Checkbox name="isActive" defaultChecked label="Flow actif" />
+            <SaveButton label="Créer le flow" />
           </form>
-        </div>
+        </Section>
 
-        {/* Légende */}
-        <div style={{
-          marginTop: '3rem',
-          padding: '1.5rem',
-          backgroundColor: '#f9fafb',
-          borderRadius: '0.75rem',
-          border: '1px solid #e5e7eb'
-        }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '1rem', color: '#374151' }}>
-            Légende du diagramme
-          </h3>
-          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '16px', height: '16px', backgroundColor: '#dbeafe', border: '2px solid #3b82f6', borderRadius: '4px' }}></div>
-              <span style={{ fontSize: '0.875rem' }}>Flow principal</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '16px', height: '16px', backgroundColor: '#dcfce7', border: '2px solid #22c55e', borderRadius: '4px' }}></div>
-              <span style={{ fontSize: '0.875rem' }}>Support technique</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '16px', height: '16px', backgroundColor: '#fef3c7', border: '2px solid #f59e0b', borderRadius: '4px' }}></div>
-              <span style={{ fontSize: '0.875rem' }}>Ventes/Commercial</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#10b981' }}></div>
-              <span style={{ fontSize: '0.875rem' }}>Actif</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#9ca3af' }}></div>
-              <span style={{ fontSize: '0.875rem' }}>Inactif</span>
-            </div>
-          </div>
+        <div className="space-y-6">
+          {flows.length === 0 ? (
+            <Section title="Aucun flow" description="Crée ton premier flow avec le formulaire à gauche.">
+              <p className="text-sm text-slate-500 dark:text-slate-300/75">La liste apparaîtra ici dès la création du premier flow.</p>
+            </Section>
+          ) : null}
+
+          {flows.map((flow) => (
+            <Section
+              key={flow.id}
+              title={flow.name || "[Flow sans nom à corriger]"}
+              description={`Destination par défaut : ${flow.destinationLabel || "-"} (${flow.destinationPost || "-"})`}
+            >
+              {!flow.name ? (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                  Ce flow contient des données incomplètes. Il faut le corriger ou le supprimer.
+                </div>
+              ) : null}
+
+              <form action={saveFlowAction} className="space-y-4">
+                <input type="hidden" name="id" value={flow.id} />
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Nom du flow">
+                    <TextInput name="name" defaultValue={flow.name} required />
+                  </Field>
+                  <Field label="Contexte" hint={flow.context?.name ? `Actuel : ${flow.context.name}` : "Optionnel"}>
+                    <Select name="contextId" defaultValue={flow.contextId} options={contextOptions} />
+                  </Field>
+                </div>
+
+                <Field label="Message d’accueil">
+                  <TextArea name="welcomeMessage" rows={3} defaultValue={flow.welcomeMessage} required />
+                </Field>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Field label="Prompt de silence">
+                    <TextArea name="silencePrompt" rows={3} defaultValue={flow.silencePrompt} required />
+                  </Field>
+                  <Field label="Prompt ambigu">
+                    <TextArea name="ambiguousPrompt" rows={3} defaultValue={flow.ambiguousPrompt} required />
+                  </Field>
+                  <Field label="Prompt de repli">
+                    <TextArea name="fallbackPrompt" rows={3} defaultValue={flow.fallbackPrompt} required />
+                  </Field>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <Field label="Action finale">
+                    <Select
+                      name="finalAction"
+                      defaultValue={flow.finalAction}
+                      required
+                      options={[
+                        { value: "transfer", label: "Transfert" },
+                        { value: "message", label: "Message" },
+                        { value: "hangup", label: "Raccrocher" },
+                      ]}
+                    />
+                  </Field>
+                  <Field label="Libellé destination">
+                    <TextInput name="destinationLabel" defaultValue={flow.destinationLabel} required />
+                  </Field>
+                  <Field label="Poste destination">
+                    <TextInput name="destinationPost" defaultValue={flow.destinationPost} required inputMode="numeric" />
+                  </Field>
+                  <Field label="Nombre max d’échecs">
+                    <TextInput
+                      name="maxFailedAttempts"
+                      defaultValue={flow.maxFailedAttempts}
+                      required
+                      inputMode="numeric"
+                    />
+                  </Field>
+                </div>
+
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <Checkbox name="isActive" defaultChecked={flow.isActive} label="Flow actif" />
+                  <SaveButton />
+                </div>
+              </form>
+
+              <div className="mt-6 border-t border-slate-200 pt-6 dark:border-white/10">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-base font-semibold">Intentions</h4>
+                    <p className="text-sm text-slate-500 dark:text-slate-300/75">
+                      Mots-clés, priorité et destination de transfert.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {flow.intents.map((intent) => (
+                    <div key={intent.id} className="rounded-2xl border border-slate-200 p-4 dark:border-white/10">
+                      <form action={saveFlowIntentAction} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                        <input type="hidden" name="id" value={intent.id} />
+                        <input type="hidden" name="flowId" value={flow.id} />
+
+                        <Field label="Libellé">
+                          <TextInput name="label" defaultValue={intent.label} required />
+                        </Field>
+                        <Field label="Route liée" hint={intent.routeRule?.serviceName || "Optionnel"}>
+                          <Select name="routeRuleId" defaultValue={intent.routeRuleId} options={routeOptions} />
+                        </Field>
+                        <Field label="Priorité">
+                          <TextInput name="priority" defaultValue={intent.priority} required inputMode="numeric" />
+                        </Field>
+
+                        <div className="md:col-span-2 xl:col-span-3">
+                          <Field label="Mots-clés" hint="Séparés par des virgules">
+                            <TextInput name="keywords" defaultValue={intent.keywords} />
+                          </Field>
+                        </div>
+
+                        <div className="md:col-span-2 xl:col-span-3">
+                          <Field label="Réponse">
+                            <TextArea name="response" rows={3} defaultValue={intent.response} />
+                          </Field>
+                        </div>
+
+                        <Field label="Action finale">
+                          <Select
+                            name="finalAction"
+                            defaultValue={intent.finalAction}
+                            required
+                            options={[
+                              { value: "transfer", label: "Transfert" },
+                              { value: "message", label: "Message" },
+                              { value: "hangup", label: "Raccrocher" },
+                            ]}
+                          />
+                        </Field>
+                        <Field label="Poste destination">
+                          <TextInput name="destinationPost" defaultValue={intent.destinationPost} required inputMode="numeric" />
+                        </Field>
+                        <div className="flex flex-col justify-end gap-3">
+                          <Checkbox name="isActive" defaultChecked={intent.isActive} label="Intention active" />
+                        </div>
+
+                        <div className="md:col-span-2 xl:col-span-3 flex flex-wrap gap-3">
+                          <SaveButton />
+                        </div>
+                      </form>
+
+                      <form action={deleteFlowIntentAction} className="mt-4">
+                        <input type="hidden" name="id" value={intent.id} />
+                        <DeleteButton />
+                      </form>
+                    </div>
+                  ))}
+
+                  <div className="rounded-2xl border border-dashed border-slate-300 p-4 dark:border-white/15">
+                    <h5 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">Ajouter une intention</h5>
+                    <form action={saveFlowIntentAction} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      <input type="hidden" name="flowId" value={flow.id} />
+
+                      <Field label="Libellé">
+                        <TextInput name="label" placeholder="Support technique / support" required />
+                      </Field>
+                      <Field label="Route liée" hint="Optionnel">
+                        <Select name="routeRuleId" options={routeOptions} />
+                      </Field>
+                      <Field label="Priorité">
+                        <TextInput name="priority" defaultValue="100" required inputMode="numeric" />
+                      </Field>
+
+                      <div className="md:col-span-2 xl:col-span-3">
+                        <Field label="Mots-clés" hint="Séparés par des virgules">
+                          <TextInput name="keywords" placeholder="support,technique,informatique" />
+                        </Field>
+                      </div>
+
+                      <div className="md:col-span-2 xl:col-span-3">
+                        <Field label="Réponse">
+                          <TextArea name="response" rows={3} placeholder="Je vous transfère vers notre équipe technique." />
+                        </Field>
+                      </div>
+
+                      <Field label="Action finale">
+                        <Select
+                          name="finalAction"
+                          required
+                          options={[
+                            { value: "transfer", label: "Transfert" },
+                            { value: "message", label: "Message" },
+                            { value: "hangup", label: "Raccrocher" },
+                          ]}
+                        />
+                      </Field>
+                      <Field label="Poste destination">
+                        <TextInput name="destinationPost" placeholder="101" required inputMode="numeric" />
+                      </Field>
+                      <div className="flex flex-col justify-end gap-3">
+                        <Checkbox name="isActive" defaultChecked label="Intention active" />
+                      </div>
+
+                      <div className="md:col-span-2 xl:col-span-3">
+                        <SaveButton label="Ajouter l’intention" />
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+              <form action={deleteFlowAction} className="mt-6">
+                <input type="hidden" name="id" value={flow.id} />
+                <DeleteButton />
+              </form>
+            </Section>
+          ))}
         </div>
       </div>
     </AdminShell>

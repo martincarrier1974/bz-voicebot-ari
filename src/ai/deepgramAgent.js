@@ -91,6 +91,38 @@ function getDefaultRoutes() {
   ];
 }
 
+function getDirectoryRoutesFromRuntimeConfig(runtimeConfig) {
+  const contacts = Array.isArray(runtimeConfig?.directoryContacts) ? runtimeConfig.directoryContacts : [];
+  return contacts
+    .filter((contact) => contact?.extension && contact?.name)
+    .map((contact) => {
+      const aliases = Array.isArray(contact.aliases) ? contact.aliases : [];
+      const keywords = [...new Set([contact.name, ...aliases].map((item) => String(item || "").trim()).filter(Boolean))];
+      return {
+        serviceName: String(contact.name).trim(),
+        extension: String(contact.extension).trim(),
+        keywords,
+        priority: 500,
+      };
+    });
+}
+
+function getRoutesFromRuntimeConfig(runtimeConfig) {
+  const configuredRoutes = Array.isArray(runtimeConfig?.routes) ? runtimeConfig.routes : [];
+  const baseRoutes = configuredRoutes.length > 0 ? configuredRoutes : getDefaultRoutes();
+  const normalizedBaseRoutes = baseRoutes
+    .filter((route) => route?.extension)
+    .map((route) => ({
+      serviceName: String(route.serviceName || `Poste ${route.extension}`).trim(),
+      extension: String(route.extension).trim(),
+      keywords: Array.isArray(route.keywords) ? route.keywords.map((keyword) => String(keyword).trim()).filter(Boolean) : [],
+      priority: Number(route.priority || 999),
+    }))
+    .sort((a, b) => a.priority - b.priority);
+
+  return [...normalizedBaseRoutes, ...getDirectoryRoutesFromRuntimeConfig(runtimeConfig)];
+}
+
 function getPrimaryFlow(runtimeConfig) {
   return Array.isArray(runtimeConfig?.flows) && runtimeConfig.flows.length > 0 ? runtimeConfig.flows[0] : null;
 }
@@ -149,12 +181,15 @@ function buildPromptFromRuntime(runtimeConfig, routes) {
   const primaryFlow = getPrimaryFlow(runtimeConfig);
   const fallbackRoute = getFallbackRoute(runtimeConfig, routes);
   const maxFailedAttempts = primaryFlow?.maxFailedAttempts ?? 2;
-  const routeLines = routes.map((route) => {
+  const routeLines = routes.filter((route) => route.priority < 500).map((route) => {
     const keywords = Array.isArray(route.keywords) && route.keywords.length > 0
       ? ` Mots-clés fréquents : ${route.keywords.join(", ")}.`
       : "";
     return `- ${route.serviceName} = poste ${route.extension}.${keywords}`;
   });
+  const directoryLines = Array.isArray(runtimeConfig?.directoryContacts) && runtimeConfig.directoryContacts.length > 0
+    ? runtimeConfig.directoryContacts.slice(0, 50).map((contact) => `- ${contact.name} = poste ${contact.extension}`)
+    : [];
   const intentLines = Array.isArray(primaryFlow?.intents) && primaryFlow.intents.length > 0
     ? primaryFlow.intents.map((intent) => {
       const keywords = Array.isArray(intent.keywords) && intent.keywords.length > 0 ? intent.keywords.join(", ") : "aucun";
@@ -209,7 +244,7 @@ export class DeepgramAgent {
     this.onTransfer = options.onTransfer ?? null;
     this.onEvent = typeof options.onEvent === "function" ? options.onEvent : null;
     this.runtimeConfig = options.runtimeConfig ?? null;
-    this._routes = Array.isArray(options.routes) && options.routes.length > 0 ? options.routes : getDefaultRoutes();
+    this._routes = Array.isArray(options.routes) && options.routes.length > 0 ? options.routes : getRoutesFromRuntimeConfig(this.runtimeConfig);
     this.agentGreeting = options.greeting ?? (buildGreetingFromRuntime(this.runtimeConfig) || null);
     this.agentPrompt = options.prompt ?? (buildPromptFromRuntime(this.runtimeConfig, this._routes) || null);
     this.ws = null;

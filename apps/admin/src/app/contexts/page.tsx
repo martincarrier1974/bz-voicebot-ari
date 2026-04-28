@@ -10,7 +10,7 @@ export default async function ContextsPage() {
   const contexts = await prisma.context.findMany({ orderBy: { updatedAt: "desc" } });
 
   return (
-    <AdminShell title="Contextes" subtitle="Définir les contextes métier, règles, ton et exemples de réponses.">
+    <AdminShell title="Contextes" subtitle="Définir les contextes métier, règles, ton et exemples de réponses." showPublishButton={true}>
       <div className="grid gap-6 xl:grid-cols-[1fr_2fr]">
         <Section title="Nouveau contexte">
           <form action={saveContextAction} className="space-y-4">

@@ -25,11 +25,11 @@ model Prompt {
 
 model PromptVersion {
   id         String   @id @default(cuid())
-  promptId    String
-  content     String
-  note        String?
-  createdAt   DateTime @default(now())
-  prompt      Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  promptId   String
+  content    String
+  note       String?
+  createdAt  DateTime @default(now())
+  prompt     Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
 }
 
 model Context {
@@ -60,39 +60,53 @@ model RouteRule {
 }
 
 model Flow {
-  id                  String       @id @default(cuid())
-  name                String       @unique
-  welcomeMessage      String
-  silencePrompt       String
-  ambiguousPrompt     String
-  fallbackPrompt      String
-  finalAction         String
-  destinationLabel    String
-  destinationPost     String
-  maxFailedAttempts   Int          @default(2)
-  isActive            Boolean      @default(true)
-  contextId           String?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
-  context             Context?     @relation(fields: [contextId], references: [id], onDelete: SetNull)
-  intents             FlowIntent[]
+  id                String       @id @default(cuid())
+  name              String       @unique
+  welcomeMessage    String
+  silencePrompt     String
+  ambiguousPrompt   String
+  fallbackPrompt    String
+  finalAction       String
+  destinationLabel  String
+  destinationPost   String
+  maxFailedAttempts Int          @default(2)
+  isActive          Boolean      @default(true)
+  contextId         String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  context           Context?     @relation(fields: [contextId], references: [id], onDelete: SetNull)
+  intents           FlowIntent[]
 }
 
 model FlowIntent {
-  id             String    @id @default(cuid())
-  flowId         String
-  routeRuleId    String?
-  label          String
-  keywords       String
-  response       String
-  finalAction    String
+  id              String     @id @default(cuid())
+  flowId          String
+  routeRuleId     String?
+  label           String
+  keywords        String
+  response        String
+  finalAction     String
   destinationPost String
-  priority       Int       @default(100)
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  flow           Flow      @relation(fields: [flowId], references: [id], onDelete: Cascade)
-  routeRule      RouteRule? @relation(fields: [routeRuleId], references: [id], onDelete: SetNull)
+  priority        Int        @default(100)
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  flow            Flow       @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  routeRule       RouteRule? @relation(fields: [routeRuleId], references: [id], onDelete: SetNull)
+}
+
+model DirectoryContact {
+  id           String   @id @default(cuid())
+  extension    String   @unique
+  name         String
+  aliases      String   @default("")
+  voicemail    String?
+  tech         String?
+  source       String
+  isActive     Boolean  @default(true)
+  lastSyncedAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Setting {

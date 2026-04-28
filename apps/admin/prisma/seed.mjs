@@ -191,6 +191,14 @@ async function main() {
       { key: "elevenlabs_model_id", label: "Modèle ElevenLabs", value: "eleven_multilingual_v2" },
       { key: "elevenlabs_voice_id", label: "Voice ID ElevenLabs", value: "" },
       { key: "elevenlabs_language", label: "Langue ElevenLabs", value: "multi" },
+      { key: "freepbx_directory_sync_enabled", label: "Activer la sync annuaire FreePBX", value: "false" },
+      { key: "freepbx_api_base_url", label: "IP du serveur", value: "" },
+      { key: "freepbx_api_token_url", label: "Token", value: "" },
+      { key: "freepbx_api_graphql_url", label: "URL GraphQL FreePBX", value: "" },
+      { key: "freepbx_api_client_id", label: "Client ID API FreePBX", value: "" },
+      { key: "freepbx_api_client_secret", label: "Client Secret API FreePBX", value: "" },
+      { key: "freepbx_directory_sync_interval_min", label: "Intervalle de sync annuaire (minutes)", value: "60" },
+      { key: "freepbx_directory_match_mode", label: "Mode de recherche annuaire", value: "contains" },
     ],
   });
 }

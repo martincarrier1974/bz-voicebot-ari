@@ -50,6 +50,14 @@ export type PublishedVoicebotFlow = {
   intents: PublishedVoicebotIntent[];
 };
 
+export type PublishedVoicebotDirectoryContact = {
+  extension: string;
+  name: string;
+  aliases: string[];
+  voicemail: string | null;
+  tech: string | null;
+};
+
 export type PublishedVoicebotConfig = {
   version: number;
   generatedAt: string;
@@ -59,6 +67,7 @@ export type PublishedVoicebotConfig = {
   context: PublishedVoicebotContext | null;
   routes: PublishedVoicebotRoute[];
   flows: PublishedVoicebotFlow[];
+  directoryContacts: PublishedVoicebotDirectoryContact[];
 };
 
 export type CallRuntimeState = {

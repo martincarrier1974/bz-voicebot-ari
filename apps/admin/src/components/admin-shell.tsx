@@ -2,6 +2,7 @@ import { logoutAction } from "@/app/actions";
 import { MobileNav, SidebarNav } from "@/components/sidebar-nav";
 import type { NavIconKey } from "@/components/sidebar-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { PublishButton } from "@/components/buttons/publish-button";
 
 const navigation: { href: string; label: string; icon: NavIconKey }[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
@@ -18,10 +19,12 @@ export function AdminShell({
   children,
   title,
   subtitle,
+  showPublishButton = false,
 }: {
   children: React.ReactNode;
   title: string;
   subtitle?: string;
+  showPublishButton?: boolean;
 }) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#070B14] dark:text-slate-100">
@@ -39,8 +42,9 @@ export function AdminShell({
                 <h2 className="mt-1 text-2xl font-semibold">{title}</h2>
                 {subtitle ? <p className="mt-1 text-sm text-slate-500 dark:text-slate-300/80">{subtitle}</p> : null}
               </div>
-              <div className="pt-2 md:pt-0">
+              <div className="pt-2 md:pt-0 flex items-center gap-2">
                 <ThemeToggle />
+                {showPublishButton && <PublishButton variant="outline" size="sm" />}
               </div>
             </div>
           </header>

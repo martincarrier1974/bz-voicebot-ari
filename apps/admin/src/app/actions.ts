@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createSession, clearSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { publishRuntimeConfig } from "@/lib/runtime-config";
+import { syncFreepbxDirectory } from "@/lib/freepbx-directory";
 
 function toBoolean(value: FormDataEntryValue | null) {
   return value === "on" || value === "true";
@@ -223,6 +224,11 @@ export async function saveSettingAction(formData: FormData) {
     await prisma.setting.create({ data });
   }
 
+  revalidateAdmin();
+}
+
+export async function syncFreepbxDirectoryAction() {
+  await syncFreepbxDirectory();
   revalidateAdmin();
 }
 
