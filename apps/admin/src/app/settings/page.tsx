@@ -2,6 +2,7 @@ import { publishRuntimeConfigAction, saveSettingAction, syncFreepbxDirectoryActi
 import { AdminShell, Section } from "@/components/admin-shell";
 import { SaveButton, Select, TextInput } from "@/components/forms";
 import { requireAuth } from "@/lib/auth";
+import { listElevenLabsVoiceOptions, type ElevenLabsVoiceOption } from "@/lib/elevenlabs";
 import { prisma } from "@/lib/prisma";
 
 type SettingSeed = {
@@ -98,18 +99,24 @@ function getSettingHelp(key: string) {
   }
 }
 
-function getInput(setting: { key: string; value: string }) {
+function getInput(setting: { key: string; value: string }, elevenLabsVoiceOptions: ElevenLabsVoiceOption[]) {
   if (setting.key === "tts_provider") return <Select name="value" defaultValue={setting.value} options={TTS_PROVIDER_OPTIONS} />;
   if (setting.key === "dg_agent_llm_model") return <Select name="value" defaultValue={setting.value} options={LLM_MODEL_OPTIONS} />;
   if (setting.key === "dg_tts_model") return <Select name="value" defaultValue={setting.value} options={TTS_MODEL_OPTIONS} />;
   if (setting.key === "elevenlabs_model_id") return <Select name="value" defaultValue={setting.value} options={ELEVENLABS_MODEL_OPTIONS} />;
+  if (setting.key === "elevenlabs_voice_id") {
+    const options = setting.value && !elevenLabsVoiceOptions.some((option) => option.value === setting.value)
+      ? [{ value: setting.value, label: `${setting.value} — valeur actuelle` }, ...elevenLabsVoiceOptions]
+      : elevenLabsVoiceOptions;
+    return <Select name="value" defaultValue={setting.value} options={options} />;
+  }
   if (setting.key === "elevenlabs_language") return <Select name="value" defaultValue={setting.value} options={ELEVENLABS_LANGUAGE_OPTIONS} />;
   if (setting.key === "freepbx_directory_sync_enabled") return <Select name="value" defaultValue={setting.value} options={YES_NO_OPTIONS} />;
   if (setting.key === "freepbx_directory_match_mode") return <Select name="value" defaultValue={setting.value} options={FREEPBX_MATCH_MODE_OPTIONS} />;
   return <TextInput name="value" defaultValue={setting.value} />;
 }
 
-function SettingCard({ setting }: { setting: { id: string; key: string; label: string; value: string } }) {
+function SettingCard({ setting, elevenLabsVoiceOptions }: { setting: { id: string; key: string; label: string; value: string }; elevenLabsVoiceOptions: ElevenLabsVoiceOption[] }) {
   const help = getSettingHelp(setting.key);
 
   return (
@@ -123,7 +130,7 @@ function SettingCard({ setting }: { setting: { id: string; key: string; label: s
         {help ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-300/70">{help}</p> : null}
       </div>
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
-        <div className="flex-1">{getInput(setting)}</div>
+        <div className="flex-1">{getInput(setting, elevenLabsVoiceOptions)}</div>
         <SaveButton />
       </div>
     </form>
@@ -132,8 +139,11 @@ function SettingCard({ setting }: { setting: { id: string; key: string; label: s
 
 export default async function SettingsPage() {
   await requireAuth();
-  const settings = await prisma.setting.findMany({ orderBy: { label: "asc" } });
-  const directoryCount = await prisma.directoryContact.count({ where: { isActive: true } });
+  const [settings, directoryCount, elevenLabsVoiceOptions] = await Promise.all([
+    prisma.setting.findMany({ orderBy: { label: "asc" } }),
+    prisma.directoryContact.count({ where: { isActive: true } }),
+    listElevenLabsVoiceOptions(),
+  ]);
   const visibleSettings = settings.filter((setting) => !setting.key.startsWith("runtime_"));
 
   const globalSettings = [
@@ -175,15 +185,18 @@ export default async function SettingsPage() {
             <li>`tts_provider` = `eleven_labs`</li>
             <li>`elevenlabs_model_id` = `eleven_multilingual_v2`</li>
             <li>`elevenlabs_language` = `multi`</li>
-            <li>Renseigner un `elevenlabs_voice_id` qui sonne bien en français québécois</li>
+            <li>Choisir une voix ElevenLabs dans la liste avec son nom + sa langue</li>
           </ul>
           <p className="mt-2 text-xs text-emerald-800 dark:text-emerald-100/70">
             Si ElevenLabs n’est pas complètement configuré, le voicebot retombera automatiquement sur Deepgram.
           </p>
+          <p className="mt-2 text-xs text-emerald-800 dark:text-emerald-100/70">
+            Voix chargées : {elevenLabsVoiceOptions.length}. Les voix FR et EN remontent en tête quand ElevenLabs répond avec leurs métadonnées.
+          </p>
         </div>
         <div className="space-y-5">
           {globalSettings.map((setting) => (
-            <SettingCard key={setting.id} setting={setting} />
+            <SettingCard key={setting.id} setting={setting} elevenLabsVoiceOptions={elevenLabsVoiceOptions} />
           ))}
         </div>
       </Section>
@@ -200,7 +213,7 @@ export default async function SettingsPage() {
         </div>
         <div className="mt-5 space-y-5">
           {freepbxSettings.map((setting) => (
-            <SettingCard key={setting.id} setting={setting} />
+            <SettingCard key={setting.id} setting={setting} elevenLabsVoiceOptions={elevenLabsVoiceOptions} />
           ))}
         </div>
       </Section>
