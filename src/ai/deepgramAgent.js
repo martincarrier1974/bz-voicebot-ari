@@ -4,6 +4,7 @@ import { log } from "../utils/logger.js";
 
 const AGENT_WS_URL = "wss://agent.deepgram.com/v1/agent/converse";
 const KEEP_ALIVE_INTERVAL_MS = 5000;
+const TRANSFER_FALLBACK_DELAY_MS = 1500;
 
 /** Prompt système par défaut (agent téléphonique BZ Telecom – routage). */
 const DEFAULT_AGENT_PROMPT = `Tu es l'agent téléphonique IA de BZ Telecom.
@@ -309,6 +310,9 @@ export class DeepgramAgent {
     this._outputSampleRate = 8000;
     this._firstChunkLogged = false;
     this._transferTriggered = false;
+    this._agentSpeaking = false;
+    this._pendingTransfer = null;
+    this._pendingTransferTimer = null;
   }
 
   _emitEvent(event) {
@@ -318,6 +322,53 @@ export class DeepgramAgent {
     } catch (err) {
       log.warn({ err, eventType: event?.type }, "Agent event callback failed");
     }
+  }
+
+  _clearPendingTransferTimer() {
+    if (this._pendingTransferTimer != null) {
+      clearTimeout(this._pendingTransferTimer);
+      this._pendingTransferTimer = null;
+    }
+  }
+
+  _queueTransfer({ poste, reason, fnId = null, fnName = null }) {
+    if (!poste || !this.onTransfer) return;
+    this._transferTriggered = true;
+    this._pendingTransfer = { poste, reason, fnId, fnName };
+    this._emitEvent({ type: "transfer_requested", poste, reason });
+    this._clearPendingTransferTimer();
+    this._pendingTransferTimer = setTimeout(() => {
+      this._flushPendingTransfer("fallback_timeout");
+    }, TRANSFER_FALLBACK_DELAY_MS);
+  }
+
+  _flushPendingTransfer(trigger) {
+    const pending = this._pendingTransfer;
+    if (!pending || !this.onTransfer) return;
+    this._pendingTransfer = null;
+    this._clearPendingTransferTimer();
+    log.info({ poste: pending.poste, reason: pending.reason, trigger }, "Exécution du transfert différé");
+    Promise.resolve(this.onTransfer(pending.poste))
+      .then((content) => {
+        if (pending.fnId && pending.fnName) {
+          this._sendFunctionCallResponse(
+            pending.fnId,
+            pending.fnName,
+            content ?? `Transfert effectué vers le poste ${pending.poste}.`
+          );
+        }
+      })
+      .catch((err) => {
+        this._transferTriggered = false;
+        log.error({ err, poste: pending.poste, trigger }, "Transfert ARI échoué");
+        if (pending.fnId && pending.fnName) {
+          this._sendFunctionCallResponse(
+            pending.fnId,
+            pending.fnName,
+            `Erreur: ${err?.message ?? "transfert impossible"}.`
+          );
+        }
+      });
   }
 
   /**
@@ -503,10 +554,13 @@ export class DeepgramAgent {
       return;
     }
     if (t === "AgentAudioDone") {
+      this._agentSpeaking = false;
       this._emitEvent({ type: "agent_audio_done" });
+      this._flushPendingTransfer("agent_audio_done");
       return;
     }
     if (t === "AgentStartedSpeaking") {
+      this._agentSpeaking = true;
       this._emitEvent({ type: "agent_audio_start" });
       return;
     }
@@ -526,15 +580,8 @@ export class DeepgramAgent {
         if (poste && (normalized.includes("je vous transf") || normalized.includes("transfert en cours"))) {
           this._transferTriggered = true;
           this._emitEvent({ type: "transfer_requested", poste, reason: "assistant_text_fallback" });
-          log.info({ poste, text, serviceName: route?.serviceName }, "Fallback transfert déclenché depuis la réponse agent");
-          Promise.resolve(this.onTransfer(poste))
-            .then((content) => {
-              log.info({ poste, content }, "Fallback transfert réussi");
-            })
-            .catch((err) => {
-              this._transferTriggered = false;
-              log.error({ err, poste }, "Fallback transfert échoué");
-            });
+          log.info({ poste, text, serviceName: route?.serviceName }, "Fallback transfert mis en attente après annonce agent");
+          this._queueTransfer({ poste, reason: "assistant_text_fallback" });
         }
       }
       return;
@@ -568,15 +615,7 @@ export class DeepgramAgent {
             this._sendFunctionCallResponse(fn.id, fn.name, `Poste invalide. Utiliser ${availableExtensions}.`);
             continue;
           }
-          this._transferTriggered = true;
-          this._emitEvent({ type: "transfer_requested", poste, reason: "function_call" });
-          Promise.resolve(this.onTransfer(poste))
-            .then((content) => this._sendFunctionCallResponse(fn.id, fn.name, content ?? `Transfert effectué vers le poste ${poste}.`))
-            .catch((err) => {
-              this._transferTriggered = false;
-              log.error({ err, poste }, "Transfert ARI échoué");
-              this._sendFunctionCallResponse(fn.id, fn.name, `Erreur: ${err?.message ?? "transfert impossible"}.`);
-            });
+          this._queueTransfer({ poste, reason: "function_call", fnId: fn.id, fnName: fn.name });
         } else {
           log.warn(
             { function_name: fn.name, client_side: fn.client_side, has_on_transfer: Boolean(this.onTransfer) },
