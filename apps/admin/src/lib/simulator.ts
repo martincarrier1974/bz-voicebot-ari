@@ -1,7 +1,32 @@
-import type { Flow, FlowIntent, Prompt, RouteRule } from "@prisma/client";
+type PromptRecord = {
+  scenario: string;
+  content: string;
+};
 
-type FlowWithRelations = Flow & {
-  intents: (FlowIntent & { routeRule: RouteRule | null })[];
+type RouteRuleRecord = {
+  id: string;
+  serviceName: string;
+  extension: string;
+  priority: number;
+  keywords: string;
+};
+
+type FlowIntentRecord = {
+  isActive: boolean;
+  routeRuleId: string | null;
+  keywords: string;
+  label: string;
+  response: string;
+  destinationPost: string;
+};
+
+type FlowWithRelations = {
+  ambiguousPrompt: string;
+  silencePrompt: string;
+  fallbackPrompt: string;
+  welcomeMessage: string;
+  maxFailedAttempts: number;
+  intents: FlowIntentRecord[];
 };
 
 export type SimulationResult = {
@@ -35,13 +60,15 @@ export function simulateFlow({
   utterance: string;
   attempt: number;
   flow: FlowWithRelations;
-  prompts: Prompt[];
-  routes: RouteRule[];
+  prompts: PromptRecord[];
+  routes: RouteRuleRecord[];
 }): SimulationResult {
   const normalizedUtterance = normalize(utterance);
   const path = ["accueil"];
 
-  const promptByScenario = new Map(prompts.map((prompt) => [prompt.scenario, prompt]));
+  const promptByScenario = new Map<string, PromptRecord>(
+    prompts.map((prompt: PromptRecord) => [prompt.scenario, prompt] as [string, PromptRecord]),
+  );
   const clarificationPrompt =
     promptByScenario.get("clarification")?.content ?? flow.ambiguousPrompt;
   const silencePrompt = promptByScenario.get("silence")?.content ?? flow.silencePrompt;
@@ -63,11 +90,11 @@ export function simulateFlow({
   const sortedRoutes = [...routes].sort((a, b) => a.priority - b.priority);
   for (const route of sortedRoutes) {
     const keywords = splitKeywords(route.keywords);
-    if (keywords.some((keyword) => normalizedUtterance.includes(normalize(keyword)))) {
+    if (keywords.some((keyword: string) => normalizedUtterance.includes(normalize(keyword)))) {
       const intent = flow.intents.find(
         (item) =>
           item.isActive &&
-          (item.routeRuleId === route.id || splitKeywords(item.keywords).some((keyword) => normalizedUtterance.includes(normalize(keyword))))
+          (item.routeRuleId === route.id || splitKeywords(item.keywords).some((keyword: string) => normalizedUtterance.includes(normalize(keyword))))
       );
 
       const scenario =

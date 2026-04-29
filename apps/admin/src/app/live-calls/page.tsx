@@ -5,6 +5,10 @@ import { readLiveCallsSnapshot } from "@/lib/live-calls";
 
 export const dynamic = "force-dynamic";
 
+type LiveCallsSnapshot = ReturnType<typeof readLiveCallsSnapshot>;
+type LiveCallRecord = LiveCallsSnapshot["calls"][number];
+type LiveCallHistoryEntry = LiveCallRecord["history"][number];
+
 export default async function LiveCallsPage() {
   await requireAuth();
 
@@ -40,7 +44,7 @@ export default async function LiveCallsPage() {
 
           {snapshot.calls.length > 0 ? (
             <div className="space-y-4">
-              {snapshot.calls.map((call) => (
+              {snapshot.calls.map((call: LiveCallRecord) => (
                 <div key={call.session.callId} className="rounded-2xl border border-slate-200 p-4">
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <Info title="Call ID" value={call.session.callId} />
@@ -58,7 +62,7 @@ export default async function LiveCallsPage() {
                       <p className="mb-2 text-sm font-medium text-slate-700">Historique récent</p>
                       <div className="space-y-2 rounded-2xl bg-slate-50 p-4">
                         {call.history.length > 0 ? (
-                          call.history.slice(-8).map((entry, index) => (
+                          call.history.slice(-8).map((entry: LiveCallHistoryEntry, index: number) => (
                             <div key={`${call.session.callId}-${index}`} className="rounded-xl bg-white px-3 py-2 text-sm text-slate-700">
                               <span className="font-semibold text-slate-900">{String(entry.role || "event")}: </span>
                               {String(entry.text || "")}

@@ -4,6 +4,8 @@ import { Checkbox, DeleteButton, Field, SaveButton, TextInput } from "@/componen
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+type RouteRecord = Awaited<ReturnType<typeof prisma.routeRule.findMany>>[number];
+
 export default async function RoutesPage() {
   await requireAuth();
   const routes = await prisma.routeRule.findMany({ orderBy: { priority: "asc" } });
@@ -33,7 +35,7 @@ export default async function RoutesPage() {
         </Section>
 
         <div className="space-y-6">
-          {routes.map((route) => (
+          {routes.map((route: RouteRecord) => (
             <Section key={route.id} title={route.serviceName} description={`Poste ${route.extension}`}>
               <form action={saveRouteAction} className="grid gap-4 md:grid-cols-2">
                 <input type="hidden" name="id" value={route.id} />

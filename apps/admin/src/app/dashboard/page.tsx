@@ -60,7 +60,7 @@ export default async function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white dark:divide-white/10 dark:bg-transparent">
-                {flows.map((flow) => (
+                {flows.map((flow: (typeof flows)[number]) => (
                   <tr key={flow.id} className="dark:hover:bg-white/5">
                     <td className="px-4 py-3 font-medium">{flow.name}</td>
                     <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{flow.context?.name ?? "Aucun"}</td>

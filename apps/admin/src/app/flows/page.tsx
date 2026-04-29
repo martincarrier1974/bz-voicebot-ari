@@ -17,6 +17,9 @@ import {
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+type ContextRecord = Awaited<ReturnType<typeof prisma.context.findMany>>[number];
+type RouteRecord = Awaited<ReturnType<typeof prisma.routeRule.findMany>>[number];
+
 export default async function FlowsPage() {
   await requireAuth();
 
@@ -42,12 +45,12 @@ export default async function FlowsPage() {
     }),
   ]);
 
-  const contextOptions = contexts.map((context) => ({
+  const contextOptions = contexts.map((context: ContextRecord) => ({
     value: context.id,
     label: context.name,
   }));
 
-  const routeOptions = routes.map((route) => ({
+  const routeOptions = routes.map((route: RouteRecord) => ({
     value: route.id,
     label: `${route.serviceName} (poste ${route.extension})`,
   }));
@@ -143,7 +146,7 @@ export default async function FlowsPage() {
             </Section>
           ) : null}
 
-          {flows.map((flow) => (
+          {flows.map((flow: (typeof flows)[number]) => (
             <Section
               key={flow.id}
               title={flow.name || "[Flow sans nom à corriger]"}
@@ -229,7 +232,7 @@ export default async function FlowsPage() {
                 </div>
 
                 <div className="space-y-4">
-                  {flow.intents.map((intent) => (
+                  {flow.intents.map((intent: (typeof flow.intents)[number]) => (
                     <div key={intent.id} className="rounded-2xl border border-slate-200 p-4 dark:border-white/10">
                       <form action={saveFlowIntentAction} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <input type="hidden" name="id" value={intent.id} />

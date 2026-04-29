@@ -12,6 +12,8 @@ type SettingSeed = {
   value: string;
 };
 
+type SettingRecord = Awaited<ReturnType<typeof prisma.setting.findMany>>[number];
+
 const TTS_MODEL_OPTIONS = [
   { value: "aura-2-agathe-fr", label: "Agathe FR - feminine, claire, professionnelle" },
   { value: "aura-2-hector-fr", label: "Hector FR - masculine, posée, professionnelle" },
@@ -144,22 +146,22 @@ export default async function SettingsPage() {
     prisma.directoryContact.count({ where: { isActive: true } }),
     listElevenLabsVoiceOptions(),
   ]);
-  const visibleSettings = settings.filter((setting) => !setting.key.startsWith("runtime_"));
+  const visibleSettings = settings.filter((setting: SettingRecord) => !setting.key.startsWith("runtime_"));
 
   const globalSettings = [
-    ...visibleSettings.filter((setting) => !setting.key.startsWith("freepbx_")),
-    ...REQUIRED_SETTINGS.filter((requiredSetting) => !settings.some((setting) => setting.key === requiredSetting.key)),
+    ...visibleSettings.filter((setting: SettingRecord) => !setting.key.startsWith("freepbx_")),
+    ...REQUIRED_SETTINGS.filter((requiredSetting) => !settings.some((setting: SettingRecord) => setting.key === requiredSetting.key)),
   ];
 
   const freepbxSettings = [
-    ...visibleSettings.filter((setting) => setting.key.startsWith("freepbx_")),
-    ...FREEPBX_API_SETTINGS.filter((requiredSetting) => !settings.some((setting) => setting.key === requiredSetting.key)),
+    ...visibleSettings.filter((setting: SettingRecord) => setting.key.startsWith("freepbx_")),
+    ...FREEPBX_API_SETTINGS.filter((requiredSetting) => !settings.some((setting: SettingRecord) => setting.key === requiredSetting.key)),
   ];
 
-  const lastPublishedAt = settings.find((setting) => setting.key === "runtime_last_published_at")?.value || null;
-  const lastPublishedPath = settings.find((setting) => setting.key === "runtime_last_published_path")?.value || null;
-  const lastDirectorySyncAt = settings.find((setting) => setting.key === "freepbx_directory_last_synced_at")?.value || null;
-  const lastDirectorySyncCount = settings.find((setting) => setting.key === "freepbx_directory_last_synced_count")?.value || null;
+  const lastPublishedAt = settings.find((setting: SettingRecord) => setting.key === "runtime_last_published_at")?.value || null;
+  const lastPublishedPath = settings.find((setting: SettingRecord) => setting.key === "runtime_last_published_path")?.value || null;
+  const lastDirectorySyncAt = settings.find((setting: SettingRecord) => setting.key === "freepbx_directory_last_synced_at")?.value || null;
+  const lastDirectorySyncCount = settings.find((setting: SettingRecord) => setting.key === "freepbx_directory_last_synced_count")?.value || null;
 
   return (
     <AdminShell title="Paramètres" subtitle="Réglages de base du panneau d’administration et du comportement global." showPublishButton={true}>
@@ -195,7 +197,7 @@ export default async function SettingsPage() {
           </p>
         </div>
         <div className="space-y-5">
-          {globalSettings.map((setting) => (
+          {globalSettings.map((setting: SettingRecord | SettingSeed) => (
             <SettingCard key={setting.id} setting={setting} elevenLabsVoiceOptions={elevenLabsVoiceOptions} />
           ))}
         </div>
@@ -212,7 +214,7 @@ export default async function SettingsPage() {
           </ul>
         </div>
         <div className="mt-5 space-y-5">
-          {freepbxSettings.map((setting) => (
+          {freepbxSettings.map((setting: SettingRecord | SettingSeed) => (
             <SettingCard key={setting.id} setting={setting} elevenLabsVoiceOptions={elevenLabsVoiceOptions} />
           ))}
         </div>

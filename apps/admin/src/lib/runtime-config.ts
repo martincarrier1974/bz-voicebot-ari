@@ -3,6 +3,11 @@ import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import type { PublishedVoicebotConfig } from "@/types/voicebot-runtime";
 
+type PromptRecord = Awaited<ReturnType<typeof prisma.prompt.findMany>>[number];
+type SettingRecord = Awaited<ReturnType<typeof prisma.setting.findMany>>[number];
+type RouteRecord = Awaited<ReturnType<typeof prisma.routeRule.findMany>>[number];
+type DirectoryContactRecord = Awaited<ReturnType<typeof prisma.directoryContact.findMany>>[number];
+
 function normalizeKeywords(value: string) {
   return value
     .split(",")
@@ -56,14 +61,14 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
     prisma.directoryContact.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
 
-  const orderedFlows = sortFlowsForRuntime(flows);
+  const orderedFlows = sortFlowsForRuntime<(typeof flows)[number]>(flows);
 
   const settingsMap = Object.fromEntries(
     settings
-      .filter((setting) => !setting.key.startsWith("runtime_"))
-      .map((setting) => [setting.key, setting.value]),
+      .filter((setting: SettingRecord) => !setting.key.startsWith("runtime_"))
+      .map((setting: SettingRecord) => [setting.key, setting.value]),
   );
-  const promptMap = Object.fromEntries(prompts.map((prompt) => [prompt.scenario, prompt.content]));
+  const promptMap = Object.fromEntries(prompts.map((prompt: PromptRecord) => [prompt.scenario, prompt.content]));
   const primaryFlow = orderedFlows[0] ?? null;
   const primaryContext = primaryFlow?.context ?? contexts[0] ?? null;
 
@@ -72,7 +77,7 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
     generatedAt: new Date().toISOString(),
     companyName: settingsMap.company_name ?? "BZ Telecom",
     prompts: {
-      main: prompts.find((prompt) => prompt.key === "main_agent_prompt")?.content ?? "",
+      main: prompts.find((prompt: PromptRecord) => prompt.key === "main_agent_prompt")?.content ?? "",
       greeting: promptMap.accueil ?? promptMap.greeting ?? primaryFlow?.welcomeMessage ?? "",
       silence: promptMap.silence ?? primaryFlow?.silencePrompt ?? "",
       clarification: promptMap.clarification ?? primaryFlow?.ambiguousPrompt ?? "",
@@ -93,13 +98,13 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
           responseExamples: primaryContext.responseExamples,
         }
       : null,
-    routes: routes.map((route) => ({
+    routes: routes.map((route: RouteRecord) => ({
       serviceName: route.serviceName,
       extension: route.extension,
       priority: route.priority,
       keywords: normalizeKeywords(route.keywords),
     })),
-    flows: orderedFlows.map((flow) => ({
+    flows: orderedFlows.map((flow: (typeof flows)[number]) => ({
       name: flow.name,
       welcomeMessage: flow.welcomeMessage,
       silencePrompt: flow.silencePrompt,
@@ -110,7 +115,7 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
       destinationPost: flow.destinationPost,
       maxFailedAttempts: flow.maxFailedAttempts,
       contextName: flow.context?.name ?? null,
-      intents: flow.intents.map((intent) => ({
+      intents: flow.intents.map((intent: (typeof flow.intents)[number]) => ({
         label: intent.label,
         keywords: normalizeKeywords(intent.keywords),
         response: intent.response,
@@ -120,7 +125,7 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
         routeServiceName: intent.routeRule?.serviceName ?? null,
       })),
     })),
-    directoryContacts: directoryContacts.map((contact) => ({
+    directoryContacts: directoryContacts.map((contact: DirectoryContactRecord) => ({
       extension: contact.extension,
       name: contact.name,
       aliases: normalizeKeywords(contact.aliases),

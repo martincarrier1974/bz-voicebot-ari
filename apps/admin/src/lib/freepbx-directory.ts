@@ -1,5 +1,8 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getFreepbxApiConfig, isFreepbxApiConfigured } from "@/lib/freepbx-api";
+
+type PrismaTransaction = Prisma.TransactionClient;
 
 export type FreepbxDirectoryEntry = {
   extension: string;
@@ -216,7 +219,7 @@ export async function syncFreepbxDirectory() {
   const nowIso = new Date().toISOString();
   const activeExtensions = new Set(entries.map((entry) => entry.extension));
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: PrismaTransaction) => {
     for (const entry of entries) {
       await tx.directoryContact.upsert({
         where: { extension: entry.extension },

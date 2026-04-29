@@ -4,6 +4,10 @@ import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { simulateFlow } from "@/lib/simulator";
 
+type FlowRecord = Awaited<ReturnType<typeof prisma.flow.findMany>>[number];
+
+type SimulatorResult = NonNullable<ReturnType<typeof simulateFlow>>;
+
 export default async function SimulatorPage({
   searchParams,
 }: {
@@ -19,7 +23,7 @@ export default async function SimulatorPage({
   const prompts = await prisma.prompt.findMany({ where: { isActive: true } });
   const routes = await prisma.routeRule.findMany({ where: { isActive: true } });
 
-  const selectedFlow = flows.find((flow) => flow.id === params.flowId) ?? flows[0];
+  const selectedFlow = flows.find((flow: FlowRecord) => flow.id === params.flowId) ?? flows[0];
   const utterance = params.utterance ?? "";
   const attempt = Number(params.attempt ?? "1");
 
@@ -41,7 +45,7 @@ export default async function SimulatorPage({
               <Select
                 name="flowId"
                 defaultValue={selectedFlow?.id}
-                options={flows.map((flow) => ({ value: flow.id, label: flow.name }))}
+                options={flows.map((flow: FlowRecord) => ({ value: flow.id, label: flow.name }))}
               />
             </Field>
 
@@ -95,7 +99,7 @@ export default async function SimulatorPage({
               <div>
                 <p className="mb-2 text-sm font-medium text-slate-700">Chemin logique</p>
                 <div className="flex flex-wrap gap-2">
-                  {result.path.map((step, index) => (
+                  {result.path.map((step: SimulatorResult["path"][number], index: number) => (
                     <span key={`${step}-${index}`} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
                       {step}
                     </span>

@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
+type SettingRecord = Awaited<ReturnType<typeof prisma.setting.findMany>>[number];
+
 export type FreepbxApiConfig = {
   enabled: boolean;
   baseUrl: string;
@@ -29,7 +31,9 @@ export async function getFreepbxApiConfig(): Promise<FreepbxApiConfig> {
     },
   });
 
-  const map = new Map(settings.map((setting) => [setting.key, setting.value]));
+  const map = new Map<string, string>(
+    settings.map((setting: SettingRecord) => [setting.key, setting.value] as [string, string]),
+  );
 
   return {
     enabled: map.get("freepbx_directory_sync_enabled") === "true",

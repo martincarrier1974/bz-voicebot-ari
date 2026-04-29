@@ -32,7 +32,7 @@ export default async function PromptsPage() {
         </Section>
 
         <div className="space-y-6">
-          {prompts.map((prompt) => (
+          {prompts.map((prompt: (typeof prompts)[number]) => (
             <Section
               key={prompt.id}
               title={prompt.name}
@@ -60,7 +60,7 @@ export default async function PromptsPage() {
               <div className="mt-4 border-t border-slate-200 pt-4">
                 <p className="mb-2 text-sm font-medium text-slate-700">Historique simple</p>
                 <div className="space-y-2">
-                  {prompt.versions.map((version) => (
+                  {prompt.versions.map((version: (typeof prompt.versions)[number]) => (
                     <div key={version.id} className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-300">
                       <div className="mb-1 font-medium">
                         {new Date(version.createdAt).toLocaleString("fr-CA")} {version.note ? `• ${version.note}` : ""}
