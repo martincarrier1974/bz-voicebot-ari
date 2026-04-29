@@ -12,6 +12,7 @@ const navigation: { href: string; label: string; icon: NavIconKey }[] = [
   { href: "/routes", label: "Routes", icon: "routes" },
   { href: "/simulator", label: "Simulateur", icon: "simulator" },
   { href: "/live-calls", label: "Appels en direct", icon: "live-calls" },
+  { href: "/booking", label: "Réservations", icon: "booking" },
   { href: "/settings", label: "Paramètres", icon: "settings" },
 ];
 

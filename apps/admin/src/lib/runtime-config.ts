@@ -7,6 +7,9 @@ type PromptRecord = Awaited<ReturnType<typeof prisma.prompt.findMany>>[number];
 type SettingRecord = Awaited<ReturnType<typeof prisma.setting.findMany>>[number];
 type RouteRecord = Awaited<ReturnType<typeof prisma.routeRule.findMany>>[number];
 type DirectoryContactRecord = Awaited<ReturnType<typeof prisma.directoryContact.findMany>>[number];
+type BookingServiceRecord = Awaited<ReturnType<typeof prisma.bookingService.findMany>>[number];
+type CalendarConnectionRecord = Awaited<ReturnType<typeof prisma.calendarConnection.findMany>>[number];
+type CalendarResourceRecord = Awaited<ReturnType<typeof prisma.calendarResource.findMany>>[number];
 
 function normalizeKeywords(value: string) {
   return value
@@ -41,7 +44,7 @@ function sortFlowsForRuntime<T extends { name: string; destinationPost: string; 
 }
 
 export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
-  const [prompts, contexts, routes, settings, flows, directoryContacts] = await Promise.all([
+  const [prompts, contexts, routes, settings, flows, directoryContacts, bookingServices, calendarConnections, calendarResources] = await Promise.all([
     prisma.prompt.findMany({ where: { isActive: true }, orderBy: { scenario: "asc" } }),
     prisma.context.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.routeRule.findMany({ where: { isActive: true }, orderBy: { priority: "asc" } }),
@@ -59,6 +62,20 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
       orderBy: { updatedAt: "desc" },
     }),
     prisma.directoryContact.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.bookingService.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.calendarConnection.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.calendarResource.findMany({
+      where: { isActive: true },
+      include: {
+        connection: true,
+        services: {
+          where: { isActive: true },
+          include: { bookingService: true },
+          orderBy: { priority: "asc" },
+        },
+      },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const orderedFlows = sortFlowsForRuntime<(typeof flows)[number]>(flows);
@@ -131,6 +148,46 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
       aliases: normalizeKeywords(contact.aliases),
       voicemail: contact.voicemail,
       tech: contact.tech,
+    })),
+    bookingServices: bookingServices.map((service: BookingServiceRecord) => ({
+      name: service.name,
+      slug: service.slug,
+      description: service.description,
+      durationMin: service.durationMin,
+      bufferBeforeMin: service.bufferBeforeMin,
+      bufferAfterMin: service.bufferAfterMin,
+    })),
+    calendarConnections: calendarConnections.map((connection: CalendarConnectionRecord) => ({
+      name: connection.name,
+      provider: connection.provider,
+      tenantId: connection.tenantId,
+      clientId: connection.clientId,
+      clientSecret: connection.clientSecret,
+      refreshToken: connection.refreshToken,
+      accountEmail: connection.accountEmail,
+      defaultCalendarId: connection.defaultCalendarId,
+      timezone: connection.timezone,
+    })),
+    calendarResources: calendarResources.map((resource: CalendarResourceRecord & {
+      connection: CalendarConnectionRecord;
+      services: Array<{
+        priority: number;
+        bookingService: BookingServiceRecord;
+      }>;
+    }) => ({
+      name: resource.name,
+      employeeName: resource.employeeName,
+      calendarId: resource.calendarId,
+      calendarAddress: resource.calendarAddress,
+      timezone: resource.timezone,
+      bookingNotes: resource.bookingNotes,
+      connectionName: resource.connection.name,
+      provider: resource.connection.provider,
+      supportedServices: resource.services.map((service) => ({
+        serviceSlug: service.bookingService.slug,
+        serviceName: service.bookingService.name,
+        priority: service.priority,
+      })),
     })),
   };
 }

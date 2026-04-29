@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageSquareText, Network, Route, PlayCircle, Settings, Shapes, PhoneCall, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, MessageSquareText, Network, Route, PlayCircle, Settings, Shapes, PhoneCall, LogOut, Menu, X, CalendarDays } from "lucide-react";
 
 const ICONS = {
   dashboard: LayoutDashboard,
@@ -13,6 +13,7 @@ const ICONS = {
   routes: Route,
   simulator: PlayCircle,
   "live-calls": PhoneCall,
+  booking: CalendarDays,
   settings: Settings,
 } as const;
 

@@ -13,9 +13,19 @@ function toBoolean(value: FormDataEntryValue | null) {
 }
 
 function revalidateAdmin() {
-  ["/dashboard", "/prompts", "/contexts", "/flows", "/routes", "/settings", "/simulator"].forEach(
+  ["/dashboard", "/prompts", "/contexts", "/flows", "/routes", "/settings", "/simulator", "/booking"].forEach(
     (path) => revalidatePath(path)
   );
+}
+
+function slugify(value: string) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .trim();
 }
 
 export async function loginAction(formData: FormData) {
@@ -225,6 +235,7 @@ export async function saveSettingAction(formData: FormData) {
   }
 
   revalidateAdmin();
+  redirect("/settings");
 }
 
 export async function syncFreepbxDirectoryAction() {
@@ -235,4 +246,139 @@ export async function syncFreepbxDirectoryAction() {
 export async function publishRuntimeConfigAction() {
   await publishRuntimeConfig();
   revalidateAdmin();
+}
+
+export async function saveBookingServiceAction(formData: FormData) {
+  const id = String(formData.get("id") || "");
+  const name = String(formData.get("name") || "").trim();
+  const data = {
+    name,
+    slug: slugify(String(formData.get("slug") || name)),
+    description: String(formData.get("description") || "").trim() || null,
+    durationMin: Number(formData.get("durationMin") || "30"),
+    bufferBeforeMin: Number(formData.get("bufferBeforeMin") || "0"),
+    bufferAfterMin: Number(formData.get("bufferAfterMin") || "0"),
+    isActive: toBoolean(formData.get("isActive")),
+  };
+
+  if (id) {
+    await prisma.bookingService.update({ where: { id }, data });
+  } else {
+    await prisma.bookingService.create({ data });
+  }
+
+  revalidateAdmin();
+  redirect("/booking");
+}
+
+export async function deleteBookingServiceAction(formData: FormData) {
+  const id = String(formData.get("id") || "");
+  if (id) {
+    await prisma.bookingService.delete({ where: { id } });
+    revalidateAdmin();
+  }
+  redirect("/booking");
+}
+
+export async function saveCalendarConnectionAction(formData: FormData) {
+  const id = String(formData.get("id") || "");
+  const data = {
+    name: String(formData.get("name") || "").trim(),
+    provider: String(formData.get("provider") || "m365").trim(),
+    tenantId: String(formData.get("tenantId") || "").trim() || null,
+    clientId: String(formData.get("clientId") || "").trim() || null,
+    clientSecret: String(formData.get("clientSecret") || "").trim() || null,
+    refreshToken: String(formData.get("refreshToken") || "").trim() || null,
+    accountEmail: String(formData.get("accountEmail") || "").trim() || null,
+    defaultCalendarId: String(formData.get("defaultCalendarId") || "").trim() || null,
+    timezone: String(formData.get("timezone") || "").trim() || null,
+    isActive: toBoolean(formData.get("isActive")),
+  };
+
+  if (id) {
+    await prisma.calendarConnection.update({ where: { id }, data });
+  } else {
+    await prisma.calendarConnection.create({ data });
+  }
+
+  revalidateAdmin();
+  redirect("/booking");
+}
+
+export async function deleteCalendarConnectionAction(formData: FormData) {
+  const id = String(formData.get("id") || "");
+  if (id) {
+    await prisma.calendarConnection.delete({ where: { id } });
+    revalidateAdmin();
+  }
+  redirect("/booking");
+}
+
+export async function saveCalendarResourceAction(formData: FormData) {
+  const id = String(formData.get("id") || "");
+  const data = {
+    name: String(formData.get("name") || "").trim(),
+    employeeName: String(formData.get("employeeName") || "").trim() || null,
+    calendarId: String(formData.get("calendarId") || "").trim(),
+    calendarAddress: String(formData.get("calendarAddress") || "").trim() || null,
+    timezone: String(formData.get("timezone") || "").trim() || null,
+    bookingNotes: String(formData.get("bookingNotes") || "").trim() || null,
+    connectionId: String(formData.get("connectionId") || "").trim(),
+    isActive: toBoolean(formData.get("isActive")),
+  };
+
+  if (id) {
+    await prisma.calendarResource.update({ where: { id }, data });
+  } else {
+    await prisma.calendarResource.create({ data });
+  }
+
+  revalidateAdmin();
+  redirect("/booking");
+}
+
+export async function deleteCalendarResourceAction(formData: FormData) {
+  const id = String(formData.get("id") || "");
+  if (id) {
+    await prisma.calendarResource.delete({ where: { id } });
+    revalidateAdmin();
+  }
+  redirect("/booking");
+}
+
+export async function saveBookingServiceResourceAction(formData: FormData) {
+  const id = String(formData.get("id") || "");
+  const data = {
+    bookingServiceId: String(formData.get("bookingServiceId") || "").trim(),
+    calendarResourceId: String(formData.get("calendarResourceId") || "").trim(),
+    priority: Number(formData.get("priority") || "100"),
+    isActive: toBoolean(formData.get("isActive")),
+  };
+
+  if (id) {
+    await prisma.bookingServiceResource.update({ where: { id }, data });
+  } else {
+    await prisma.bookingServiceResource.upsert({
+      where: {
+        bookingServiceId_calendarResourceId: {
+          bookingServiceId: data.bookingServiceId,
+          calendarResourceId: data.calendarResourceId,
+        },
+      },
+      update: data,
+      create: data,
+    });
+  }
+
+  revalidateAdmin();
+  redirect("/booking");
+}
+
+export async function deleteBookingServiceResourceAction(formData: FormData) {
+  const id = String(formData.get("id") || "");
+  if (id) {
+    await prisma.bookingServiceResource.delete({ where: { id } });
+    revalidateAdmin();
+  }
+  redirect("/booking");
 }

@@ -58,6 +58,43 @@ export type PublishedVoicebotDirectoryContact = {
   tech: string | null;
 };
 
+export type PublishedBookingService = {
+  name: string;
+  slug: string;
+  description: string | null;
+  durationMin: number;
+  bufferBeforeMin: number;
+  bufferAfterMin: number;
+};
+
+export type PublishedCalendarConnection = {
+  name: string;
+  provider: string;
+  tenantId: string | null;
+  clientId: string | null;
+  clientSecret: string | null;
+  refreshToken: string | null;
+  accountEmail: string | null;
+  defaultCalendarId: string | null;
+  timezone: string | null;
+};
+
+export type PublishedCalendarResource = {
+  name: string;
+  employeeName: string | null;
+  calendarId: string;
+  calendarAddress: string | null;
+  timezone: string | null;
+  bookingNotes: string | null;
+  connectionName: string;
+  provider: string;
+  supportedServices: Array<{
+    serviceSlug: string;
+    serviceName: string;
+    priority: number;
+  }>;
+};
+
 export type PublishedVoicebotConfig = {
   version: number;
   generatedAt: string;
@@ -68,6 +105,9 @@ export type PublishedVoicebotConfig = {
   routes: PublishedVoicebotRoute[];
   flows: PublishedVoicebotFlow[];
   directoryContacts: PublishedVoicebotDirectoryContact[];
+  bookingServices: PublishedBookingService[];
+  calendarConnections: PublishedCalendarConnection[];
+  calendarResources: PublishedCalendarResource[];
 };
 
 export type CallRuntimeState = {
