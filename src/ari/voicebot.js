@@ -74,7 +74,7 @@ async function handleCallWithRestApi(rtp, rawChannel) {
     ourExternalMediaIds.add(ext.id);
     log.info({ extId: ext.id }, "ExternalMedia created (attente StasisStart pour addChannel)");
     pendingBridgeAdd.set(ext.id, { bridgeId: bridge.id, externalHost, chanId });
-  } catch {
+  } catch (e) {
     log.error({ err: e, chanId }, "Error in call handling (REST)");
   }
 }
@@ -131,7 +131,7 @@ export async function startVoicebot() {
         try {
           await axios.post(`${ariBase}/bridges/${pending.bridgeId}/addChannel`, { channel: chanId }, { auth: ariAuth });
           log.info({ bridge: pending.bridgeId, extMedia: chanId, externalHost: pending.externalHost }, "Bridge + ExternalMedia ready (après StasisStart)");
-        } catch {
+        } catch (e) {
           log.error({ err: e, chanId, bridgeId: pending.bridgeId }, "addChannel (ExternalMedia) failed");
         }
         return;
@@ -197,7 +197,7 @@ export async function startVoicebot() {
           log.warn("DEEPGRAM_API_KEY not set, voice pipeline disabled");
         }
 
-      } catch {
+      } catch (e) {
         log.error({ err: e, chanId }, "Error in call handling");
         try { await channel.hangup(); } catch { /* ignore hangup errors */ }
       }
