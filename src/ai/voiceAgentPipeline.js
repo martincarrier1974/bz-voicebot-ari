@@ -337,7 +337,6 @@ export class VoiceAgentPipeline {
       : null;
     this.agent = new DeepgramAgent(
       (audioMulaw) => {
-        if (!this.rtpServer.remote) return;
         this.rtpServer.sendUlawStream(audioMulaw);
       },
       {

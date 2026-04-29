@@ -77,6 +77,9 @@ export class RtpServer {
   setRemote(rinfo) {
     this.remote = { address: rinfo.address, port: rinfo.port };
     log.info({ remote: this.remote }, "RTP remote learned");
+    if (this._playQueue.length > 0) {
+      this._startPlaybackIfNeeded();
+    }
   }
 
   start() {
@@ -148,8 +151,10 @@ export class RtpServer {
       return;
     }
     this._emptyTicks = 0;
+    if (!this.remote) {
+      return;
+    }
     const frame = this._playQueue.shift();
-    if (!this.remote) return;
     if (!this._sentFirstPacket) {
       this._sentFirstPacket = true;
       log.info({ to: this.remote }, "RTP first packet sent to Asterisk (voix retour)");
