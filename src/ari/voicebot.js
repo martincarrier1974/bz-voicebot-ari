@@ -74,7 +74,7 @@ async function handleCallWithRestApi(rtp, rawChannel) {
     ourExternalMediaIds.add(ext.id);
     log.info({ extId: ext.id }, "ExternalMedia created (attente StasisStart pour addChannel)");
     pendingBridgeAdd.set(ext.id, { bridgeId: bridge.id, externalHost, chanId });
-  } catch (e) {
+  } catch {
     log.error({ err: e, chanId }, "Error in call handling (REST)");
   }
 }
@@ -131,7 +131,7 @@ export async function startVoicebot() {
         try {
           await axios.post(`${ariBase}/bridges/${pending.bridgeId}/addChannel`, { channel: chanId }, { auth: ariAuth });
           log.info({ bridge: pending.bridgeId, extMedia: chanId, externalHost: pending.externalHost }, "Bridge + ExternalMedia ready (après StasisStart)");
-        } catch (e) {
+        } catch {
           log.error({ err: e, chanId, bridgeId: pending.bridgeId }, "addChannel (ExternalMedia) failed");
         }
         return;
@@ -197,7 +197,7 @@ export async function startVoicebot() {
           log.warn("DEEPGRAM_API_KEY not set, voice pipeline disabled");
         }
 
-      } catch (e) {
+      } catch {
         log.error({ err: e, chanId }, "Error in call handling");
         try { await channel.hangup(); } catch { /* ignore hangup errors */ }
       }
@@ -221,7 +221,7 @@ export async function startVoicebot() {
             try {
               await client.channels.hangup({ channelId: extId });
               ourExternalMediaIds.delete(extId);
-            } catch (e) {
+            } catch {
               // Ignorer si déjà fermé
             }
           }
@@ -233,12 +233,12 @@ export async function startVoicebot() {
           if (bridge.bridge_type === "mixing" && (!bridge.channels || bridge.channels.length === 0)) {
             try {
               await client.bridges.destroy({ bridgeId: bridge.id });
-            } catch (e) {
+            } catch {
               // Ignorer si déjà fermé
             }
           }
         }
-      } catch (err) {
+      } catch {
         // Ignorer les erreurs de nettoyage
       }
       

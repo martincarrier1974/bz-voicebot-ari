@@ -54,6 +54,56 @@ function normalizeText(value) {
     .trim();
 }
 
+function getRouteMatchScore(route, text) {
+  const normalizedText = normalizeText(text);
+  if (!normalizedText || !route) return 0;
+
+  const extension = normalizeText(route.extension);
+  const serviceName = normalizeText(route.serviceName);
+  const keywords = Array.isArray(route.keywords)
+    ? route.keywords.map((keyword) => normalizeText(keyword)).filter(Boolean)
+    : [];
+
+  let score = 0;
+
+  if (extension && [extension, `poste ${extension}`, `poste numero ${extension}`, `extension ${extension}`].some((term) => normalizedText.includes(term))) {
+    score = Math.max(score, 100);
+  }
+
+  if (serviceName) {
+    if (normalizedText === serviceName) {
+      score = Math.max(score, 98);
+    } else if (normalizedText.includes(serviceName)) {
+      score = Math.max(score, 92);
+    } else if (serviceName.includes(normalizedText)) {
+      score = Math.max(score, 78);
+    }
+  }
+
+  for (const keyword of keywords) {
+    if (normalizedText === keyword) {
+      score = Math.max(score, 94);
+      continue;
+    }
+    if (normalizedText.includes(keyword) || keyword.includes(normalizedText)) {
+      score = Math.max(score, 84);
+    }
+  }
+
+  const textTokens = new Set(normalizedText.split(/\s+/).filter(Boolean));
+  const routeTokens = new Set([serviceName, ...keywords].flatMap((value) => value.split(/\s+/)).filter(Boolean));
+  let overlap = 0;
+  for (const token of routeTokens) {
+    if (textTokens.has(token)) overlap += 1;
+  }
+  if (routeTokens.size > 0) {
+    score = Math.max(score, Math.round((overlap / routeTokens.size) * 100));
+  }
+
+  return score;
+}
+
+
 function getPrimaryFlow(runtimeConfig) {
   return Array.isArray(runtimeConfig?.flows) && runtimeConfig.flows.length > 0 ? runtimeConfig.flows[0] : null;
 }
