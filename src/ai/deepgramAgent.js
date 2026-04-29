@@ -4,7 +4,7 @@ import { log } from "../utils/logger.js";
 
 const AGENT_WS_URL = "wss://agent.deepgram.com/v1/agent/converse";
 const KEEP_ALIVE_INTERVAL_MS = 5000;
-const TRANSFER_FALLBACK_DELAY_MS = 1500;
+const TRANSFER_FALLBACK_DELAY_MS = 4000;
 
 /** Prompt système par défaut (agent téléphonique BZ Telecom – routage). */
 const DEFAULT_AGENT_PROMPT = `Tu es l'agent téléphonique IA de BZ Telecom.
@@ -313,6 +313,7 @@ export class DeepgramAgent {
     this._agentSpeaking = false;
     this._pendingTransfer = null;
     this._pendingTransferTimer = null;
+    this._pendingTransferSpeechStarted = false;
   }
 
   _emitEvent(event) {
@@ -335,19 +336,28 @@ export class DeepgramAgent {
     if (!poste || !this.onTransfer) return;
     this._transferTriggered = true;
     this._pendingTransfer = { poste, reason, fnId, fnName };
+    this._pendingTransferSpeechStarted = this._agentSpeaking;
     this._emitEvent({ type: "transfer_requested", poste, reason });
     this._clearPendingTransferTimer();
     this._pendingTransferTimer = setTimeout(() => {
-      this._flushPendingTransfer("fallback_timeout");
+      this._flushPendingTransfer("fallback_timeout", { force: true });
     }, TRANSFER_FALLBACK_DELAY_MS);
   }
 
-  _flushPendingTransfer(trigger) {
+  _flushPendingTransfer(trigger, options = {}) {
     const pending = this._pendingTransfer;
     if (!pending || !this.onTransfer) return;
+    const force = options.force === true;
+    if (!force && this._agentSpeaking) {
+      return;
+    }
+    if (!force && this._pendingTransferSpeechStarted === false && trigger !== "fallback_timeout") {
+      return;
+    }
     this._pendingTransfer = null;
+    this._pendingTransferSpeechStarted = false;
     this._clearPendingTransferTimer();
-    log.info({ poste: pending.poste, reason: pending.reason, trigger }, "Exécution du transfert différé");
+    log.info({ poste: pending.poste, reason: pending.reason, trigger, force }, "Exécution du transfert différé");
     Promise.resolve(this.onTransfer(pending.poste))
       .then((content) => {
         if (pending.fnId && pending.fnName) {
@@ -561,6 +571,9 @@ export class DeepgramAgent {
     }
     if (t === "AgentStartedSpeaking") {
       this._agentSpeaking = true;
+      if (this._pendingTransfer) {
+        this._pendingTransferSpeechStarted = true;
+      }
       this._emitEvent({ type: "agent_audio_start" });
       return;
     }
