@@ -91,8 +91,8 @@ function buildAliases(name: string) {
   return [...aliases];
 }
 
-async function getAccessToken() {
-  const config = await getFreepbxApiConfig();
+async function getAccessToken(tenantId: string) {
+  const config = await getFreepbxApiConfig(tenantId);
   if (!isFreepbxApiConfigured(config)) {
     throw new Error("La configuration API FreePBX est incomplète.");
   }
@@ -123,8 +123,8 @@ async function getAccessToken() {
   return { config, accessToken: payload.access_token };
 }
 
-async function freepbxGraphql<T>(query: string): Promise<T> {
-  const { config, accessToken } = await getAccessToken();
+async function freepbxGraphql<T>(tenantId: string, query: string): Promise<T> {
+  const { config, accessToken } = await getAccessToken(tenantId);
   const response = await fetch(config.graphqlUrl, {
     method: "POST",
     headers: {
@@ -197,10 +197,10 @@ function mergeDirectoryEntries(coreUsers: CoreUserRecord[], extensions: Extensio
   return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
 }
 
-export async function fetchFreepbxDirectory() {
+export async function fetchFreepbxDirectory(tenantId: string) {
   const [coreUsersData, extensionsData] = await Promise.all([
-    freepbxGraphql<{ allCoreUsers?: { coreUser?: CoreUserRecord[] | null } | null }>(CORE_USERS_QUERY),
-    freepbxGraphql<{ fetchAllExtensions?: { extension?: ExtensionRecord[] | null } | null }>(EXTENSIONS_QUERY),
+    freepbxGraphql<{ allCoreUsers?: { coreUser?: CoreUserRecord[] | null } | null }>(tenantId, CORE_USERS_QUERY),
+    freepbxGraphql<{ fetchAllExtensions?: { extension?: ExtensionRecord[] | null } | null }>(tenantId, EXTENSIONS_QUERY),
   ]);
 
   const coreUsers = coreUsersData.allCoreUsers?.coreUser ?? [];
@@ -209,47 +209,53 @@ export async function fetchFreepbxDirectory() {
   return mergeDirectoryEntries(coreUsers, extensions);
 }
 
-export async function syncFreepbxDirectory() {
-  const config = await getFreepbxApiConfig();
+export async function syncFreepbxDirectory(tenantId: string) {
+  const config = await getFreepbxApiConfig(tenantId);
   if (!isFreepbxApiConfigured(config)) {
     throw new Error("La configuration API FreePBX est incomplète.");
   }
 
-  const entries = await fetchFreepbxDirectory();
+  const entries = await fetchFreepbxDirectory(tenantId);
   const nowIso = new Date().toISOString();
   const activeExtensions = new Set(entries.map((entry) => entry.extension));
 
   await prisma.$transaction(async (tx: PrismaTransaction) => {
     for (const entry of entries) {
-      await tx.directoryContact.upsert({
-        where: { extension: entry.extension },
-        update: {
-          name: entry.name,
-          aliases: entry.aliases.join(", "),
-          voicemail: entry.voicemail,
-          tech: entry.tech,
-          source: entry.source,
-          isActive: true,
-          lastSyncedAt: new Date(nowIso),
-        },
-        create: {
-          extension: entry.extension,
-          name: entry.name,
-          aliases: entry.aliases.join(", "),
-          voicemail: entry.voicemail,
-          tech: entry.tech,
-          source: entry.source,
-          isActive: true,
-          lastSyncedAt: new Date(nowIso),
-        },
-      });
+      const existing = await tx.directoryContact.findFirst({ where: { tenantId, extension: entry.extension } });
+      if (existing) {
+        await tx.directoryContact.update({
+          where: { id: existing.id },
+          data: {
+            name: entry.name,
+            aliases: entry.aliases.join(", "),
+            voicemail: entry.voicemail,
+            tech: entry.tech,
+            source: entry.source,
+            isActive: true,
+            lastSyncedAt: new Date(nowIso),
+          },
+        });
+      } else {
+        await tx.directoryContact.create({
+          data: {
+            tenantId,
+            extension: entry.extension,
+            name: entry.name,
+            aliases: entry.aliases.join(", "),
+            voicemail: entry.voicemail,
+            tech: entry.tech,
+            source: entry.source,
+            isActive: true,
+            lastSyncedAt: new Date(nowIso),
+          },
+        });
+      }
     }
 
     await tx.directoryContact.updateMany({
       where: {
-        extension: {
-          notIn: [...activeExtensions],
-        },
+        tenantId,
+        extension: { notIn: [...activeExtensions] },
       },
       data: {
         isActive: false,
@@ -257,32 +263,18 @@ export async function syncFreepbxDirectory() {
       },
     });
 
-    await tx.setting.upsert({
-      where: { key: "freepbx_directory_last_synced_at" },
-      update: { label: "Dernière sync annuaire FreePBX", value: nowIso },
-      create: { key: "freepbx_directory_last_synced_at", label: "Dernière sync annuaire FreePBX", value: nowIso },
-    });
-
-    await tx.setting.upsert({
-      where: { key: "freepbx_directory_last_synced_count" },
-      update: { label: "Nombre de contacts importés FreePBX", value: String(entries.length) },
-      create: { key: "freepbx_directory_last_synced_count", label: "Nombre de contacts importés FreePBX", value: String(entries.length) },
-    });
+    for (const [key, label, value] of [
+      ["freepbx_directory_last_synced_at", "Dernière sync annuaire FreePBX", nowIso],
+      ["freepbx_directory_last_synced_count", "Dernier volume importé", String(entries.length)],
+    ] as const) {
+      const existingSetting = await tx.setting.findFirst({ where: { tenantId, key } });
+      if (existingSetting) {
+        await tx.setting.update({ where: { id: existingSetting.id }, data: { label, value } });
+      } else {
+        await tx.setting.create({ data: { tenantId, key, label, value } });
+      }
+    }
   });
 
-  return {
-    syncedAt: nowIso,
-    count: entries.length,
-    entries,
-  };
-}
-
-export async function testFreepbxConnection() {
-  const config = await getFreepbxApiConfig();
-  return {
-    configured: isFreepbxApiConfigured(config),
-    graphqlUrl: config.graphqlUrl,
-    tokenUrl: config.tokenUrl,
-    directoryPreview: await fetchFreepbxDirectory(),
-  };
+  return { count: entries.length, syncedAt: nowIso };
 }

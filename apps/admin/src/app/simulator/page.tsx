@@ -1,126 +1,34 @@
 import { AdminShell, Section } from "@/components/admin-shell";
-import { Field, SaveButton, Select, TextArea } from "@/components/forms";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { simulateFlow } from "@/lib/simulator";
+import { getTenantContext } from "@/lib/tenant";
 
-type FlowRecord = Awaited<ReturnType<typeof prisma.flow.findMany>>[number];
-
-type SimulatorResult = NonNullable<ReturnType<typeof simulateFlow>>;
-
-export default async function SimulatorPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ utterance?: string; attempt?: string; flowId?: string }>;
-}) {
+export default async function SimulatorPage({ searchParams }: { searchParams?: Promise<{ tenantId?: string; message?: string }> }) {
   await requireAuth();
-
-  const params = await searchParams;
-  const flows = await prisma.flow.findMany({
-    include: { intents: { include: { routeRule: true } } },
-    orderBy: { name: "asc" },
-  });
-  const prompts = await prisma.prompt.findMany({ where: { isActive: true } });
-  const routes = await prisma.routeRule.findMany({ where: { isActive: true } });
-
-  const selectedFlow = flows.find((flow: FlowRecord) => flow.id === params.flowId) ?? flows[0];
-  const utterance = params.utterance ?? "";
-  const attempt = Number(params.attempt ?? "1");
-
-  const result =
-    selectedFlow && (utterance || params.attempt)
-      ? simulateFlow({ utterance, attempt, flow: selectedFlow, prompts, routes })
-      : null;
+  const params = searchParams ? await searchParams : {};
+  const { tenants, currentTenant, tenantId } = await getTenantContext(params);
+  const flows = tenantId ? await prisma.flow.findMany({ where: { tenantId, isActive: true }, orderBy: { name: "asc" } }) : [];
 
   return (
-    <AdminShell
-      title="Simulateur"
-      subtitle="Tester un flow sans appeler le système réel et visualiser le chemin logique."
-      showPublishButton={true}
-    >
-      <div className="grid gap-6 xl:grid-cols-[1fr_1.4fr]">
-        <Section title="Entrée de simulation" description="Saisir une phrase utilisateur et choisir le flow à tester.">
-          <form className="space-y-4">
-            <Field label="Flow" hint="Choisis le flow à tester">
-              <Select
-                name="flowId"
-                defaultValue={selectedFlow?.id}
-                options={flows.map((flow: FlowRecord) => ({ value: flow.id, label: flow.name }))}
-              />
-            </Field>
-
-            <Field label="Phrase utilisateur" hint="Ce que le client dit">
-              <TextArea
-                name="utterance"
-                rows={5}
-                defaultValue={utterance}
-                placeholder="Exemple : J'ai un problème avec mon internet."
-                required
-              />
-            </Field>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Tentative" hint="Simule une relance">
-                <Select
-                  name="attempt"
-                  defaultValue={String(attempt)}
-                  options={[
-                    { value: "1", label: "1re tentative" },
-                    { value: "2", label: "2e tentative" },
-                  ]}
-                />
-              </Field>
-            </div>
-
-            <SaveButton label="Simuler" />
+    <AdminShell title="Simulateur" subtitle="Prépare les tests pour le client sélectionné" tenants={tenants} currentTenant={currentTenant}>
+      <div className="grid gap-6 xl:grid-cols-[1fr,1.2fr]">
+        <Section title="Préparer un test">
+          <form className="grid gap-4" method="get">
+            <input type="hidden" name="tenantId" value={tenantId ?? ""} />
+            <label className="text-sm font-semibold">Message utilisateur</label>
+            <textarea name="message" defaultValue={params.message ?? ""} rows={8} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5" />
+            <button type="submit" className="inline-flex items-center justify-center rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white">Mettre à jour</button>
           </form>
         </Section>
-
-        <Section title="Résultat" description="Intention détectée, prompt utilisé, réponse et destination finale.">
-          {result ? (
-            <div className="space-y-5">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Info title="Intention détectée" value={result.matchedIntent} />
-                <Info title="Route détectée" value={result.matchedRoute} />
-                <Info title="Destination finale" value={result.destination} />
-                <Info title="Flow testé" value={selectedFlow?.name ?? "Aucun"} />
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm font-medium text-slate-700">Prompt utilisé</p>
-                <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">{result.promptUsed}</div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm font-medium text-slate-700">Réponse générée</p>
-                <div className="rounded-2xl bg-sky-50 p-4 text-sm text-sky-900">{result.response}</div>
-              </div>
-
-              <div>
-                <p className="mb-2 text-sm font-medium text-slate-700">Chemin logique</p>
-                <div className="flex flex-wrap gap-2">
-                  {result.path.map((step: SimulatorResult["path"][number], index: number) => (
-                    <span key={`${step}-${index}`} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                      {step}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500">Lance une simulation pour voir le chemin logique ici.</p>
-          )}
+        <Section title="Données disponibles">
+          <p className="text-sm text-slate-600 dark:text-slate-300/80">Flows actifs pour ce client :</p>
+          <ul className="mt-3 space-y-2 text-sm">
+            {flows.map((flow) => (
+              <li key={flow.id} className="rounded-xl border border-slate-200 px-3 py-2 dark:border-white/10">{flow.name}</li>
+            ))}
+          </ul>
         </Section>
       </div>
     </AdminShell>
-  );
-}
-
-function Info({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{title}</p>
-      <p className="mt-2 text-sm font-medium text-slate-800">{value}</p>
-    </div>
   );
 }

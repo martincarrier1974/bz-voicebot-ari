@@ -1,3 +1,6 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
 import { publishRuntimeConfigAction } from "@/app/actions";
 
 export function PublishButton({
@@ -9,6 +12,8 @@ export function PublishButton({
   variant?: "solid" | "outline";
   size?: "sm" | "md";
 }) {
+  const searchParams = useSearchParams();
+  const tenantId = searchParams.get("tenantId") ?? "";
   const base = "inline-flex items-center justify-center rounded-xl font-semibold transition focus:outline-none focus:ring-4 focus:ring-sky-500/20";
   const variantClass =
     variant === "outline"
@@ -18,6 +23,7 @@ export function PublishButton({
 
   return (
     <form action={publishRuntimeConfigAction}>
+      <input type="hidden" name="tenantId" value={tenantId} />
       <button type="submit" className={`${base} ${variantClass} ${sizeClass}`}>
         {label}
       </button>

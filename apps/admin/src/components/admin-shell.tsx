@@ -3,9 +3,11 @@ import { MobileNav, SidebarNav } from "@/components/sidebar-nav";
 import type { NavIconKey } from "@/components/sidebar-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { PublishButton } from "@/components/buttons/publish-button";
+import { TenantSelector } from "@/components/tenant-selector";
 
 const navigation: { href: string; label: string; icon: NavIconKey }[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
+  { href: "/clients", label: "Clients", icon: "clients" },
   { href: "/prompts", label: "Prompts", icon: "prompts" },
   { href: "/contexts", label: "Contextes", icon: "contexts" },
   { href: "/flows", label: "Flows", icon: "flows" },
@@ -21,11 +23,15 @@ export function AdminShell({
   title,
   subtitle,
   showPublishButton = false,
+  tenants = [],
+  currentTenant = null,
 }: {
   children: React.ReactNode;
   title: string;
   subtitle?: string;
   showPublishButton?: boolean;
+  tenants?: Array<{ id: string; name: string; slug: string }>;
+  currentTenant?: { id: string; name: string; slug: string } | null;
 }) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-[#070B14] dark:text-slate-100">
@@ -37,15 +43,19 @@ export function AdminShell({
         <main className="flex-1 px-4 py-6 md:px-8">
           <MobileNav navigation={navigation} logoutAction={logoutAction} title={title} />
           <header className="mb-6 rounded-2xl border border-slate-200 bg-white px-6 py-5 shadow-sm dark:border-white/10 dark:bg-white/5 dark:backdrop-blur">
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-400/80">Administration</p>
                 <h2 className="mt-1 text-2xl font-semibold">{title}</h2>
                 {subtitle ? <p className="mt-1 text-sm text-slate-500 dark:text-slate-300/80">{subtitle}</p> : null}
+                {currentTenant ? <p className="mt-2 text-xs text-sky-700 dark:text-sky-300">Client courant : {currentTenant.name}</p> : null}
               </div>
-              <div className="pt-2 md:pt-0 flex items-center gap-2">
-                <ThemeToggle />
-                {showPublishButton && <PublishButton variant="outline" size="sm" />}
+              <div className="flex flex-col items-stretch gap-2 pt-2 md:items-end md:pt-0">
+                {tenants.length > 0 ? <TenantSelector tenants={tenants} currentTenantId={currentTenant?.id ?? null} /> : null}
+                <div className="flex items-center gap-2 md:self-end">
+                  <ThemeToggle />
+                  {showPublishButton && <PublishButton variant="outline" size="sm" />}
+                </div>
               </div>
             </div>
           </header>

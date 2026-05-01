@@ -7,14 +7,15 @@ import { createSession, clearSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { publishRuntimeConfig } from "@/lib/runtime-config";
 import { syncFreepbxDirectory } from "@/lib/freepbx-directory";
+import { getTenantIdFromFormData, getRuntimeConfigPathForTenant } from "@/lib/tenant";
 
 function toBoolean(value: FormDataEntryValue | null) {
   return value === "on" || value === "true";
 }
 
 function revalidateAdmin() {
-  ["/dashboard", "/prompts", "/contexts", "/flows", "/routes", "/settings", "/simulator", "/booking"].forEach(
-    (path) => revalidatePath(path)
+  ["/dashboard", "/clients", "/prompts", "/contexts", "/flows", "/routes", "/settings", "/simulator", "/booking", "/live-calls"].forEach(
+    (path) => revalidatePath(path),
   );
 }
 
@@ -26,6 +27,14 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "")
     .trim();
+}
+
+async function requireTenantId(formData: FormData) {
+  const tenantId = await getTenantIdFromFormData(formData);
+  if (!tenantId) {
+    throw new Error("Aucun client sélectionné.");
+  }
+  return tenantId;
 }
 
 export async function loginAction(formData: FormData) {
@@ -59,9 +68,49 @@ export async function logoutAction() {
   redirect("/login");
 }
 
+export async function saveTenantAction(formData: FormData) {
+  const id = String(formData.get("id") || "");
+  const name = String(formData.get("name") || "").trim();
+  const slug = slugify(String(formData.get("slug") || name));
+  const runtimeConfigPathInput = String(formData.get("runtimeConfigPath") || "").trim();
+  const notes = String(formData.get("notes") || "").trim() || null;
+  const isActive = toBoolean(formData.get("isActive"));
+
+  if (!name || !slug) {
+    throw new Error("Nom et slug client requis.");
+  }
+
+  const runtimeConfigPath = runtimeConfigPathInput || getRuntimeConfigPathForTenant({ slug });
+
+  if (id) {
+    await prisma.tenant.update({
+      where: { id },
+      data: { name, slug, runtimeConfigPath, notes, isActive },
+    });
+  } else {
+    await prisma.tenant.create({
+      data: { name, slug, runtimeConfigPath, notes, isActive },
+    });
+  }
+
+  revalidateAdmin();
+  redirect("/clients");
+}
+
+export async function deleteTenantAction(formData: FormData) {
+  const id = String(formData.get("id") || "");
+  if (!id) return;
+
+  await prisma.tenant.delete({ where: { id } });
+  revalidateAdmin();
+  redirect("/clients");
+}
+
 export async function savePromptAction(formData: FormData) {
+  const tenantId = await requireTenantId(formData);
   const id = String(formData.get("id") || "");
   const data = {
+    tenantId,
     key: String(formData.get("key") || ""),
     name: String(formData.get("name") || ""),
     scenario: String(formData.get("scenario") || ""),
@@ -97,8 +146,10 @@ export async function deletePromptAction(formData: FormData) {
 }
 
 export async function saveContextAction(formData: FormData) {
+  const tenantId = await requireTenantId(formData);
   const id = String(formData.get("id") || "");
   const data = {
+    tenantId,
     name: String(formData.get("name") || ""),
     description: String(formData.get("description") || ""),
     instructions: String(formData.get("instructions") || ""),
@@ -127,8 +178,10 @@ export async function deleteContextAction(formData: FormData) {
 }
 
 export async function saveRouteAction(formData: FormData) {
+  const tenantId = await requireTenantId(formData);
   const id = String(formData.get("id") || "");
   const data = {
+    tenantId,
     serviceName: String(formData.get("serviceName") || ""),
     extension: String(formData.get("extension") || ""),
     keywords: String(formData.get("keywords") || ""),
@@ -154,9 +207,11 @@ export async function deleteRouteAction(formData: FormData) {
 }
 
 export async function saveFlowAction(formData: FormData) {
+  const tenantId = await requireTenantId(formData);
   const id = String(formData.get("id") || "");
   const contextIdValue = String(formData.get("contextId") || "");
   const data = {
+    tenantId,
     name: String(formData.get("name") || ""),
     welcomeMessage: String(formData.get("welcomeMessage") || ""),
     silencePrompt: String(formData.get("silencePrompt") || ""),
@@ -220,13 +275,15 @@ export async function deleteFlowIntentAction(formData: FormData) {
 }
 
 export async function saveSettingAction(formData: FormData) {
+  const tenantId = await requireTenantId(formData);
   const data = {
+    tenantId,
     key: String(formData.get("key") || ""),
     label: String(formData.get("label") || ""),
     value: String(formData.get("value") || ""),
   };
 
-  const existingByKey = await prisma.setting.findUnique({ where: { key: data.key } });
+  const existingByKey = await prisma.setting.findFirst({ where: { tenantId, key: data.key } });
 
   if (existingByKey) {
     await prisma.setting.update({ where: { id: existingByKey.id }, data });
@@ -238,20 +295,24 @@ export async function saveSettingAction(formData: FormData) {
   redirect("/settings");
 }
 
-export async function syncFreepbxDirectoryAction() {
-  await syncFreepbxDirectory();
+export async function syncFreepbxDirectoryAction(formData: FormData) {
+  const tenantId = await requireTenantId(formData);
+  await syncFreepbxDirectory(tenantId);
   revalidateAdmin();
 }
 
-export async function publishRuntimeConfigAction() {
-  await publishRuntimeConfig();
+export async function publishRuntimeConfigAction(formData: FormData) {
+  const tenantId = await requireTenantId(formData);
+  await publishRuntimeConfig(tenantId);
   revalidateAdmin();
 }
 
 export async function saveBookingServiceAction(formData: FormData) {
+  const tenantId = await requireTenantId(formData);
   const id = String(formData.get("id") || "");
   const name = String(formData.get("name") || "").trim();
   const data = {
+    tenantId,
     name,
     slug: slugify(String(formData.get("slug") || name)),
     description: String(formData.get("description") || "").trim() || null,
@@ -281,11 +342,13 @@ export async function deleteBookingServiceAction(formData: FormData) {
 }
 
 export async function saveCalendarConnectionAction(formData: FormData) {
+  const tenantId = await requireTenantId(formData);
   const id = String(formData.get("id") || "");
   const data = {
+    tenantId,
     name: String(formData.get("name") || "").trim(),
     provider: String(formData.get("provider") || "m365").trim(),
-    tenantId: String(formData.get("tenantId") || "").trim() || null,
+    tenantExternalId: String(formData.get("tenantIdExternal") || formData.get("tenantId") || "").trim() || null,
     clientId: String(formData.get("clientId") || "").trim() || null,
     clientSecret: String(formData.get("clientSecret") || "").trim() || null,
     refreshToken: String(formData.get("refreshToken") || "").trim() || null,
@@ -315,8 +378,10 @@ export async function deleteCalendarConnectionAction(formData: FormData) {
 }
 
 export async function saveCalendarResourceAction(formData: FormData) {
+  const tenantId = await requireTenantId(formData);
   const id = String(formData.get("id") || "");
   const data = {
+    tenantId,
     name: String(formData.get("name") || "").trim(),
     employeeName: String(formData.get("employeeName") || "").trim() || null,
     calendarId: String(formData.get("calendarId") || "").trim(),

@@ -2,11 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageSquareText, Network, Route, PlayCircle, Settings, Shapes, PhoneCall, LogOut, Menu, X, CalendarDays } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { LayoutDashboard, MessageSquareText, Network, Route, PlayCircle, Settings, Shapes, PhoneCall, LogOut, Menu, X, CalendarDays, Building2 } from "lucide-react";
 
 const ICONS = {
   dashboard: LayoutDashboard,
+  clients: Building2,
   prompts: MessageSquareText,
   contexts: Shapes,
   flows: Network,
@@ -24,6 +25,12 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function withTenant(href: string, tenantId: string | null) {
+  if (!tenantId) return href;
+  const separator = href.includes("?") ? "&" : "?";
+  return `${href}${separator}tenantId=${encodeURIComponent(tenantId)}`;
+}
+
 export function SidebarNav({
   navigation,
   logoutAction,
@@ -32,6 +39,8 @@ export function SidebarNav({
   logoutAction: (formData: FormData) => void | Promise<void>;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tenantId = searchParams.get("tenantId");
 
   return (
     <div className="flex h-full flex-col">
@@ -48,7 +57,7 @@ export function SidebarNav({
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={withTenant(item.href, tenantId)}
               aria-current={active ? "page" : undefined}
               className={[
                 "group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition",
@@ -151,4 +160,3 @@ export function MobileNav({
     </>
   );
 }
-

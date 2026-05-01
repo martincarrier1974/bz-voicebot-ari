@@ -1,83 +1,55 @@
-import { deletePromptAction, savePromptAction } from "@/app/actions";
 import { AdminShell, Section } from "@/components/admin-shell";
-import { Checkbox, DeleteButton, SaveButton, TextArea, TextInput } from "@/components/forms";
+import { Checkbox, DeleteButton, Field, SaveButton, TextArea, TextInput } from "@/components/forms";
+import { deletePromptAction, savePromptAction } from "@/app/actions";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
-export default async function PromptsPage() {
+export default async function PromptsPage({ searchParams }: { searchParams?: Promise<{ tenantId?: string }> }) {
   await requireAuth();
-
-  const prompts = await prisma.prompt.findMany({
-    include: { versions: { orderBy: { createdAt: "desc" }, take: 5 } },
-    orderBy: [{ scenario: "asc" }, { updatedAt: "desc" }],
-  });
+  const { tenants, currentTenant, tenantId } = await getTenantContext(searchParams);
+  const prompts = tenantId ? await prisma.prompt.findMany({ where: { tenantId }, orderBy: [{ scenario: "asc" }, { name: "asc" }] }) : [];
 
   return (
-    <AdminShell
-      title="Gestion des prompts"
-      subtitle="Créer, modifier, activer et versionner les prompts utilisés par l’agent vocal."
-      showPublishButton={true}
-    >
-      <div className="grid gap-6 xl:grid-cols-[1fr_2fr]">
-        <Section title="Nouveau prompt" description="Ajouter un prompt ou sous-prompt par scénario.">
-          <form action={savePromptAction} className="space-y-4">
-            <TextInput name="key" placeholder="greeting" required />
-            <TextInput name="name" placeholder="Prompt accueil" required />
-            <TextInput name="scenario" placeholder="accueil" required />
-            <TextInput name="description" placeholder="Description courte" />
-            <TextArea name="content" rows={6} placeholder="Contenu du prompt..." />
-            <Checkbox name="isActive" defaultChecked label="Actif" />
-            <SaveButton label="Créer le prompt" />
+    <AdminShell title="Prompts" subtitle="Prompts scoppés par client" tenants={tenants} currentTenant={currentTenant}>
+      <div className="grid gap-6 xl:grid-cols-[1.1fr,1.4fr]">
+        <Section title="Nouveau prompt">
+          <form action={savePromptAction} className="grid gap-4">
+            <input type="hidden" name="tenantId" value={tenantId ?? ""} />
+            <Field label="Clé"><TextInput name="key" required placeholder="main_agent_prompt" /></Field>
+            <Field label="Nom"><TextInput name="name" required placeholder="Prompt principal" /></Field>
+            <Field label="Scénario"><TextInput name="scenario" required placeholder="main" /></Field>
+            <Field label="Description"><TextInput name="description" placeholder="Utilisation de ce prompt" /></Field>
+            <Field label="Contenu"><TextArea name="content" rows={10} required /></Field>
+            <Checkbox name="isActive" defaultChecked label="Prompt actif" />
+            <SaveButton />
           </form>
         </Section>
-
-        <div className="space-y-6">
-          {prompts.map((prompt: (typeof prompts)[number]) => (
-            <Section
-              key={prompt.id}
-              title={prompt.name}
-              description={`Scénario : ${prompt.scenario} | clé : ${prompt.key}`}
-            >
-              <form action={savePromptAction} className="space-y-4">
-                <input type="hidden" name="id" value={prompt.id} />
-                <div className="grid gap-4 md:grid-cols-2">
-                  <TextInput name="key" defaultValue={prompt.key} required />
-                  <TextInput name="name" defaultValue={prompt.name} required />
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <TextInput name="scenario" defaultValue={prompt.scenario} required />
-                  <TextInput name="description" defaultValue={prompt.description} />
-                </div>
-                <TextArea name="content" rows={5} defaultValue={prompt.content} />
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Checkbox name="isActive" defaultChecked={prompt.isActive} label="Prompt actif" />
-                  <div className="flex gap-3">
-                    <SaveButton />
+        <Section title="Prompts existants">
+          <div className="space-y-5">
+            {prompts.map((prompt) => (
+              <div key={prompt.id} className="rounded-2xl border border-slate-200 p-4 dark:border-white/10">
+                <form action={savePromptAction} className="grid gap-4">
+                  <input type="hidden" name="id" value={prompt.id} />
+                  <input type="hidden" name="tenantId" value={tenantId ?? ""} />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Clé"><TextInput name="key" defaultValue={prompt.key} required /></Field>
+                    <Field label="Scénario"><TextInput name="scenario" defaultValue={prompt.scenario} required /></Field>
                   </div>
-                </div>
-              </form>
-
-              <div className="mt-4 border-t border-slate-200 pt-4">
-                <p className="mb-2 text-sm font-medium text-slate-700">Historique simple</p>
-                <div className="space-y-2">
-                  {prompt.versions.map((version: (typeof prompt.versions)[number]) => (
-                    <div key={version.id} className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-300">
-                      <div className="mb-1 font-medium">
-                        {new Date(version.createdAt).toLocaleString("fr-CA")} {version.note ? `• ${version.note}` : ""}
-                      </div>
-                      <div className="line-clamp-3 whitespace-pre-wrap">{version.content}</div>
-                    </div>
-                  ))}
-                </div>
+                  <Field label="Nom"><TextInput name="name" defaultValue={prompt.name} required /></Field>
+                  <Field label="Description"><TextInput name="description" defaultValue={prompt.description} /></Field>
+                  <Field label="Contenu"><TextArea name="content" defaultValue={prompt.content} rows={8} required /></Field>
+                  <Checkbox name="isActive" defaultChecked={prompt.isActive} label="Prompt actif" />
+                  <SaveButton />
+                </form>
+                <form action={deletePromptAction} className="mt-3">
+                  <input type="hidden" name="id" value={prompt.id} />
+                  <DeleteButton />
+                </form>
               </div>
-
-              <form action={deletePromptAction} className="mt-4">
-                <input type="hidden" name="id" value={prompt.id} />
-                <DeleteButton />
-              </form>
-            </Section>
-          ))}
-        </div>
+            ))}
+          </div>
+        </Section>
       </div>
     </AdminShell>
   );

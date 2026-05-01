@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,9 +7,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Tenant {
+  id                String               @id @default(cuid())
+  name              String
+  slug              String               @unique
+  runtimeConfigPath String?
+  notes             String?
+  isActive          Boolean              @default(true)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  prompts             Prompt[]
+  contexts            Context[]
+  routeRules          RouteRule[]
+  flows               Flow[]
+  directoryContacts   DirectoryContact[]
+  settings            Setting[]
+  bookingServices     BookingService[]
+  calendarConnections CalendarConnection[]
+  calendarResources   CalendarResource[]
+
+  @@index([isActive, name])
+}
+
 model Prompt {
   id          String          @id @default(cuid())
-  key         String          @unique
+  tenantId    String?
+  key         String
   name        String
   scenario    String
   description String?
@@ -20,7 +41,11 @@ model Prompt {
   isActive    Boolean         @default(true)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  tenant      Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   versions    PromptVersion[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId, scenario])
 }
 
 model PromptVersion {
@@ -34,7 +59,8 @@ model PromptVersion {
 
 model Context {
   id               String   @id @default(cuid())
-  name             String   @unique
+  tenantId         String?
+  name             String
   description      String
   instructions     String
   voiceTone        String
@@ -44,24 +70,35 @@ model Context {
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  tenant           Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   flows            Flow[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive])
 }
 
 model RouteRule {
   id          String       @id @default(cuid())
-  serviceName String       @unique
+  tenantId    String?
+  serviceName String
   extension   String
   keywords    String
   priority    Int          @default(100)
   isActive    Boolean      @default(true)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  tenant      Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   intents     FlowIntent[]
+
+  @@unique([tenantId, serviceName])
+  @@index([tenantId, extension])
+  @@index([tenantId, isActive, priority])
 }
 
 model Flow {
   id                String       @id @default(cuid())
-  name              String       @unique
+  tenantId          String?
+  name              String
   welcomeMessage    String
   silencePrompt     String
   ambiguousPrompt   String
@@ -74,8 +111,12 @@ model Flow {
   contextId         String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
+  tenant            Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   context           Context?     @relation(fields: [contextId], references: [id], onDelete: SetNull)
   intents           FlowIntent[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive, updatedAt])
 }
 
 model FlowIntent {
@@ -97,7 +138,8 @@ model FlowIntent {
 
 model DirectoryContact {
   id           String   @id @default(cuid())
-  extension    String   @unique
+  tenantId     String?
+  extension    String
   name         String
   aliases      String   @default("")
   voicemail    String?
@@ -107,21 +149,31 @@ model DirectoryContact {
   lastSyncedAt DateTime @default(now())
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, extension])
+  @@index([tenantId, isActive, name])
 }
 
 model Setting {
   id        String   @id @default(cuid())
-  key       String   @unique
+  tenantId  String?
+  key       String
   label     String
   value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, label])
 }
 
 model BookingService {
   id              String                   @id @default(cuid())
-  name            String                   @unique
-  slug            String                   @unique
+  tenantId        String?
+  name            String
+  slug            String
   description     String?
   durationMin     Int
   bufferBeforeMin Int                      @default(0)
@@ -129,28 +181,39 @@ model BookingService {
   isActive        Boolean                  @default(true)
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
+  tenant          Tenant?                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   resources       BookingServiceResource[]
+
+  @@unique([tenantId, name])
+  @@unique([tenantId, slug])
+  @@index([tenantId, isActive])
 }
 
 model CalendarConnection {
-  id                   String             @id @default(cuid())
-  name                 String             @unique
-  provider             String
-  tenantId             String?
-  clientId             String?
-  clientSecret         String?
-  refreshToken         String?
-  accountEmail         String?
-  defaultCalendarId    String?
-  timezone             String?
-  isActive             Boolean            @default(true)
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  resources            CalendarResource[]
+  id                String             @id @default(cuid())
+  tenantId          String?
+  name              String
+  provider          String
+  tenantExternalId  String?
+  clientId          String?
+  clientSecret      String?
+  refreshToken      String?
+  accountEmail      String?
+  defaultCalendarId String?
+  timezone          String?
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  tenant            Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  resources         CalendarResource[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive])
 }
 
 model CalendarResource {
   id               String                   @id @default(cuid())
+  tenantId         String?
   name             String
   employeeName     String?
   calendarId       String
@@ -161,22 +224,24 @@ model CalendarResource {
   isActive         Boolean                  @default(true)
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
+  tenant           Tenant?                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   connection       CalendarConnection       @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   services         BookingServiceResource[]
 
   @@unique([connectionId, calendarId])
+  @@index([tenantId, isActive, name])
 }
 
 model BookingServiceResource {
-  id                String           @id @default(cuid())
-  bookingServiceId  String
+  id                 String           @id @default(cuid())
+  bookingServiceId   String
   calendarResourceId String
-  priority          Int              @default(100)
-  isActive          Boolean          @default(true)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  bookingService    BookingService   @relation(fields: [bookingServiceId], references: [id], onDelete: Cascade)
-  calendarResource  CalendarResource @relation(fields: [calendarResourceId], references: [id], onDelete: Cascade)
+  priority           Int              @default(100)
+  isActive           Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  bookingService     BookingService   @relation(fields: [bookingServiceId], references: [id], onDelete: Cascade)
+  calendarResource   CalendarResource @relation(fields: [calendarResourceId], references: [id], onDelete: Cascade)
 
   @@unique([bookingServiceId, calendarResourceId])
 }

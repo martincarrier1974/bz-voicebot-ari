@@ -1,356 +1,124 @@
-import {
-  deleteFlowAction,
-  deleteFlowIntentAction,
-  saveFlowAction,
-  saveFlowIntentAction,
-} from "@/app/actions";
 import { AdminShell, Section } from "@/components/admin-shell";
-import {
-  Checkbox,
-  DeleteButton,
-  Field,
-  SaveButton,
-  Select,
-  TextArea,
-  TextInput,
-} from "@/components/forms";
+import { Checkbox, DeleteButton, Field, SaveButton, Select, TextArea, TextInput } from "@/components/forms";
+import { deleteFlowAction, deleteFlowIntentAction, saveFlowAction, saveFlowIntentAction } from "@/app/actions";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getTenantContext } from "@/lib/tenant";
 
-type ContextRecord = Awaited<ReturnType<typeof prisma.context.findMany>>[number];
-type RouteRecord = Awaited<ReturnType<typeof prisma.routeRule.findMany>>[number];
-
-export default async function FlowsPage() {
+export default async function FlowsPage({ searchParams }: { searchParams?: Promise<{ tenantId?: string }> }) {
   await requireAuth();
+  const { tenants, currentTenant, tenantId } = await getTenantContext(searchParams);
 
-  const [flows, contexts, routes] = await Promise.all([
-    prisma.flow.findMany({
-      include: {
-        context: true,
-        intents: {
-          include: {
-            routeRule: true,
-          },
-          orderBy: { priority: "asc" },
+  let contexts: Awaited<ReturnType<typeof prisma.context.findMany>> = [];
+  let routes: Awaited<ReturnType<typeof prisma.routeRule.findMany>> = [];
+  let flows: any[] = [];
+
+  if (tenantId) {
+    [contexts, routes, flows] = await Promise.all([
+      prisma.context.findMany({ where: { tenantId, isActive: true }, orderBy: { name: "asc" } }),
+      prisma.routeRule.findMany({ where: { tenantId, isActive: true }, orderBy: { serviceName: "asc" } }),
+      prisma.flow.findMany({
+        where: { tenantId },
+        include: {
+          intents: { include: { routeRule: true }, orderBy: { priority: "asc" } },
         },
-      },
-      orderBy: { updatedAt: "desc" },
-    }),
-    prisma.context.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.routeRule.findMany({
-      orderBy: [{ priority: "asc" }, { serviceName: "asc" }],
-    }),
-  ]);
+        orderBy: { name: "asc" },
+      }),
+    ]);
+  }
 
-  const contextOptions = contexts.map((context: ContextRecord) => ({
-    value: context.id,
-    label: context.name,
-  }));
-
-  const routeOptions = routes.map((route: RouteRecord) => ({
-    value: route.id,
-    label: `${route.serviceName} (poste ${route.extension})`,
-  }));
+  const contextOptions = contexts.map((context) => ({ value: context.id, label: context.name }));
+  const routeOptions = routes.map((route) => ({ value: route.id, label: `${route.serviceName} → ${route.extension}` }));
 
   return (
-    <AdminShell
-      title="Flows"
-      subtitle="Configurer les parcours d’appel, leurs messages et les intentions de transfert."
-      showPublishButton={true}
-    >
-      <div className="grid gap-6 xl:grid-cols-[1fr_2fr]">
-        <Section title="Nouveau flow" description="Créer un nouveau parcours avec une destination par défaut.">
-          <form action={saveFlowAction} className="space-y-4">
-            <Field label="Nom du flow">
-              <TextInput name="name" placeholder="Flow principal BZ Telecom" required />
-            </Field>
-
-            <Field label="Contexte" hint="Optionnel">
-              <Select name="contextId" options={contextOptions} />
-            </Field>
-
-            <Field label="Message d’accueil">
-              <TextArea
-                name="welcomeMessage"
-                rows={3}
-                placeholder="Bonjour, bienvenue chez BZ Telecom. Comment puis-je vous aider aujourd’hui ?"
-                required
-              />
-            </Field>
-
-            <Field label="Prompt de silence">
-              <TextArea
-                name="silencePrompt"
-                rows={2}
-                placeholder="Je suis toujours là. Pouvez-vous répéter, s’il vous plaît ?"
-                required
-              />
-            </Field>
-
-            <Field label="Prompt ambigu">
-              <TextArea
-                name="ambiguousPrompt"
-                rows={2}
-                placeholder="Je veux être certain de bien comprendre votre demande."
-                required
-              />
-            </Field>
-
-            <Field label="Prompt de repli">
-              <TextArea
-                name="fallbackPrompt"
-                rows={2}
-                placeholder="Je vais vous transférer vers un agent pour vous aider."
-                required
-              />
-            </Field>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Action finale">
-                <Select
-                  name="finalAction"
-                  required
-                  options={[
-                    { value: "transfer", label: "Transfert" },
-                    { value: "message", label: "Message" },
-                    { value: "hangup", label: "Raccrocher" },
-                  ]}
-                />
-              </Field>
-              <Field label="Nombre max d’échecs">
-                <TextInput name="maxFailedAttempts" defaultValue="2" required inputMode="numeric" />
-              </Field>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Libellé destination">
-                <TextInput name="destinationLabel" placeholder="Réception / Autres" required />
-              </Field>
-              <Field label="Poste destination">
-                <TextInput name="destinationPost" placeholder="105" required inputMode="numeric" />
-              </Field>
-            </div>
-
-            <Checkbox name="isActive" defaultChecked label="Flow actif" />
-            <SaveButton label="Créer le flow" />
+    <AdminShell title="Flows" subtitle="Parcours conversationnels par client" tenants={tenants} currentTenant={currentTenant}>
+      <div className="grid gap-6">
+        <Section title="Nouveau flow">
+          <form action={saveFlowAction} className="grid gap-4 xl:grid-cols-2">
+            <input type="hidden" name="tenantId" value={tenantId ?? ""} />
+            <Field label="Nom"><TextInput name="name" required /></Field>
+            <Field label="Contexte"><Select name="contextId" options={contextOptions} /></Field>
+            <Field label="Message accueil"><TextArea name="welcomeMessage" rows={4} required /></Field>
+            <Field label="Prompt silence"><TextArea name="silencePrompt" rows={4} required /></Field>
+            <Field label="Prompt ambigu"><TextArea name="ambiguousPrompt" rows={4} required /></Field>
+            <Field label="Prompt fallback"><TextArea name="fallbackPrompt" rows={4} required /></Field>
+            <Field label="Action finale"><TextInput name="finalAction" defaultValue="transfer" required /></Field>
+            <Field label="Libellé destination"><TextInput name="destinationLabel" defaultValue="Réception" required /></Field>
+            <Field label="Poste destination"><TextInput name="destinationPost" defaultValue="105" required /></Field>
+            <Field label="Max erreurs"><TextInput name="maxFailedAttempts" type="number" defaultValue="2" required /></Field>
+            <div className="xl:col-span-2"><Checkbox name="isActive" defaultChecked label="Flow actif" /></div>
+            <div className="xl:col-span-2"><SaveButton /></div>
           </form>
         </Section>
 
-        <div className="space-y-6">
-          {flows.length === 0 ? (
-            <Section title="Aucun flow" description="Crée ton premier flow avec le formulaire à gauche.">
-              <p className="text-sm text-slate-500 dark:text-slate-300/75">La liste apparaîtra ici dès la création du premier flow.</p>
-            </Section>
-          ) : null}
+        <Section title="Flows existants">
+          <div className="space-y-6">
+            {flows.map((flow) => (
+              <div key={flow.id} className="rounded-2xl border border-slate-200 p-4 dark:border-white/10">
+                <form action={saveFlowAction} className="grid gap-4 xl:grid-cols-2">
+                  <input type="hidden" name="id" value={flow.id} />
+                  <input type="hidden" name="tenantId" value={tenantId ?? ""} />
+                  <Field label="Nom"><TextInput name="name" defaultValue={flow.name} required /></Field>
+                  <Field label="Contexte"><Select name="contextId" defaultValue={flow.contextId} options={contextOptions} /></Field>
+                  <Field label="Message accueil"><TextArea name="welcomeMessage" defaultValue={flow.welcomeMessage} rows={4} required /></Field>
+                  <Field label="Prompt silence"><TextArea name="silencePrompt" defaultValue={flow.silencePrompt} rows={4} required /></Field>
+                  <Field label="Prompt ambigu"><TextArea name="ambiguousPrompt" defaultValue={flow.ambiguousPrompt} rows={4} required /></Field>
+                  <Field label="Prompt fallback"><TextArea name="fallbackPrompt" defaultValue={flow.fallbackPrompt} rows={4} required /></Field>
+                  <Field label="Action finale"><TextInput name="finalAction" defaultValue={flow.finalAction} required /></Field>
+                  <Field label="Libellé destination"><TextInput name="destinationLabel" defaultValue={flow.destinationLabel} required /></Field>
+                  <Field label="Poste destination"><TextInput name="destinationPost" defaultValue={flow.destinationPost} required /></Field>
+                  <Field label="Max erreurs"><TextInput name="maxFailedAttempts" type="number" defaultValue={flow.maxFailedAttempts} required /></Field>
+                  <div className="xl:col-span-2"><Checkbox name="isActive" defaultChecked={flow.isActive} label="Flow actif" /></div>
+                  <div className="xl:col-span-2 flex gap-3"><SaveButton /></div>
+                </form>
+                <form action={deleteFlowAction} className="mt-3">
+                  <input type="hidden" name="id" value={flow.id} />
+                  <DeleteButton />
+                </form>
 
-          {flows.map((flow: (typeof flows)[number]) => (
-            <Section
-              key={flow.id}
-              title={flow.name || "[Flow sans nom à corriger]"}
-              description={`Destination par défaut : ${flow.destinationLabel || "-"} (${flow.destinationPost || "-"})`}
-            >
-              {!flow.name ? (
-                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                  Ce flow contient des données incomplètes. Il faut le corriger ou le supprimer.
-                </div>
-              ) : null}
+                {"intents" in flow ? (
+                  <div className="mt-6 space-y-4 border-t border-slate-200 pt-4 dark:border-white/10">
+                    <h4 className="text-sm font-semibold">Intents</h4>
+                    {flow.intents.map((intent: any) => (
+                      <div key={intent.id} className="rounded-xl border border-slate-200 p-4 dark:border-white/10">
+                        <form action={saveFlowIntentAction} className="grid gap-4 xl:grid-cols-2">
+                          <input type="hidden" name="id" value={intent.id} />
+                          <input type="hidden" name="flowId" value={flow.id} />
+                          <Field label="Libellé"><TextInput name="label" defaultValue={intent.label} required /></Field>
+                          <Field label="Route liée"><Select name="routeRuleId" defaultValue={intent.routeRuleId} options={routeOptions} /></Field>
+                          <Field label="Mots-clés"><TextInput name="keywords" defaultValue={intent.keywords} required /></Field>
+                          <Field label="Priorité"><TextInput name="priority" type="number" defaultValue={intent.priority} required /></Field>
+                          <Field label="Réponse"><TextArea name="response" defaultValue={intent.response} rows={4} required /></Field>
+                          <Field label="Action finale"><TextInput name="finalAction" defaultValue={intent.finalAction} required /></Field>
+                          <Field label="Poste destination"><TextInput name="destinationPost" defaultValue={intent.destinationPost} required /></Field>
+                          <div className="xl:col-span-2"><Checkbox name="isActive" defaultChecked={intent.isActive} label="Intent active" /></div>
+                          <div className="xl:col-span-2"><SaveButton /></div>
+                        </form>
+                        <form action={deleteFlowIntentAction} className="mt-3">
+                          <input type="hidden" name="id" value={intent.id} />
+                          <DeleteButton />
+                        </form>
+                      </div>
+                    ))}
 
-              <form action={saveFlowAction} className="space-y-4">
-                <input type="hidden" name="id" value={flow.id} />
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Nom du flow">
-                    <TextInput name="name" defaultValue={flow.name} required />
-                  </Field>
-                  <Field label="Contexte" hint={flow.context?.name ? `Actuel : ${flow.context.name}` : "Optionnel"}>
-                    <Select name="contextId" defaultValue={flow.contextId} options={contextOptions} />
-                  </Field>
-                </div>
-
-                <Field label="Message d’accueil">
-                  <TextArea name="welcomeMessage" rows={3} defaultValue={flow.welcomeMessage} required />
-                </Field>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <Field label="Prompt de silence">
-                    <TextArea name="silencePrompt" rows={3} defaultValue={flow.silencePrompt} required />
-                  </Field>
-                  <Field label="Prompt ambigu">
-                    <TextArea name="ambiguousPrompt" rows={3} defaultValue={flow.ambiguousPrompt} required />
-                  </Field>
-                  <Field label="Prompt de repli">
-                    <TextArea name="fallbackPrompt" rows={3} defaultValue={flow.fallbackPrompt} required />
-                  </Field>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <Field label="Action finale">
-                    <Select
-                      name="finalAction"
-                      defaultValue={flow.finalAction}
-                      required
-                      options={[
-                        { value: "transfer", label: "Transfert" },
-                        { value: "message", label: "Message" },
-                        { value: "hangup", label: "Raccrocher" },
-                      ]}
-                    />
-                  </Field>
-                  <Field label="Libellé destination">
-                    <TextInput name="destinationLabel" defaultValue={flow.destinationLabel} required />
-                  </Field>
-                  <Field label="Poste destination">
-                    <TextInput name="destinationPost" defaultValue={flow.destinationPost} required inputMode="numeric" />
-                  </Field>
-                  <Field label="Nombre max d’échecs">
-                    <TextInput
-                      name="maxFailedAttempts"
-                      defaultValue={flow.maxFailedAttempts}
-                      required
-                      inputMode="numeric"
-                    />
-                  </Field>
-                </div>
-
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <Checkbox name="isActive" defaultChecked={flow.isActive} label="Flow actif" />
-                  <SaveButton />
-                </div>
-              </form>
-
-              <div className="mt-6 border-t border-slate-200 pt-6 dark:border-white/10">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-base font-semibold">Intentions</h4>
-                    <p className="text-sm text-slate-500 dark:text-slate-300/75">
-                      Mots-clés, priorité et destination de transfert.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  {flow.intents.map((intent: (typeof flow.intents)[number]) => (
-                    <div key={intent.id} className="rounded-2xl border border-slate-200 p-4 dark:border-white/10">
-                      <form action={saveFlowIntentAction} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <input type="hidden" name="id" value={intent.id} />
-                        <input type="hidden" name="flowId" value={flow.id} />
-
-                        <Field label="Libellé">
-                          <TextInput name="label" defaultValue={intent.label} required />
-                        </Field>
-                        <Field label="Route liée" hint={intent.routeRule?.serviceName || "Optionnel"}>
-                          <Select name="routeRuleId" defaultValue={intent.routeRuleId} options={routeOptions} />
-                        </Field>
-                        <Field label="Priorité">
-                          <TextInput name="priority" defaultValue={intent.priority} required inputMode="numeric" />
-                        </Field>
-
-                        <div className="md:col-span-2 xl:col-span-3">
-                          <Field label="Mots-clés" hint="Séparés par des virgules">
-                            <TextInput name="keywords" defaultValue={intent.keywords} />
-                          </Field>
-                        </div>
-
-                        <div className="md:col-span-2 xl:col-span-3">
-                          <Field label="Réponse">
-                            <TextArea name="response" rows={3} defaultValue={intent.response} />
-                          </Field>
-                        </div>
-
-                        <Field label="Action finale">
-                          <Select
-                            name="finalAction"
-                            defaultValue={intent.finalAction}
-                            required
-                            options={[
-                              { value: "transfer", label: "Transfert" },
-                              { value: "message", label: "Message" },
-                              { value: "hangup", label: "Raccrocher" },
-                            ]}
-                          />
-                        </Field>
-                        <Field label="Poste destination">
-                          <TextInput name="destinationPost" defaultValue={intent.destinationPost} required inputMode="numeric" />
-                        </Field>
-                        <div className="flex flex-col justify-end gap-3">
-                          <Checkbox name="isActive" defaultChecked={intent.isActive} label="Intention active" />
-                        </div>
-
-                        <div className="md:col-span-2 xl:col-span-3 flex flex-wrap gap-3">
-                          <SaveButton />
-                        </div>
-                      </form>
-
-                      <form action={deleteFlowIntentAction} className="mt-4">
-                        <input type="hidden" name="id" value={intent.id} />
-                        <DeleteButton />
-                      </form>
-                    </div>
-                  ))}
-
-                  <div className="rounded-2xl border border-dashed border-slate-300 p-4 dark:border-white/15">
-                    <h5 className="mb-4 text-sm font-semibold text-slate-800 dark:text-slate-100">Ajouter une intention</h5>
-                    <form action={saveFlowIntentAction} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <form action={saveFlowIntentAction} className="grid gap-4 rounded-xl border border-dashed border-slate-300 p-4 dark:border-white/15 xl:grid-cols-2">
                       <input type="hidden" name="flowId" value={flow.id} />
-
-                      <Field label="Libellé">
-                        <TextInput name="label" placeholder="Support technique / support" required />
-                      </Field>
-                      <Field label="Route liée" hint="Optionnel">
-                        <Select name="routeRuleId" options={routeOptions} />
-                      </Field>
-                      <Field label="Priorité">
-                        <TextInput name="priority" defaultValue="100" required inputMode="numeric" />
-                      </Field>
-
-                      <div className="md:col-span-2 xl:col-span-3">
-                        <Field label="Mots-clés" hint="Séparés par des virgules">
-                          <TextInput name="keywords" placeholder="support,technique,informatique" />
-                        </Field>
-                      </div>
-
-                      <div className="md:col-span-2 xl:col-span-3">
-                        <Field label="Réponse">
-                          <TextArea name="response" rows={3} placeholder="Je vous transfère vers notre équipe technique." />
-                        </Field>
-                      </div>
-
-                      <Field label="Action finale">
-                        <Select
-                          name="finalAction"
-                          required
-                          options={[
-                            { value: "transfer", label: "Transfert" },
-                            { value: "message", label: "Message" },
-                            { value: "hangup", label: "Raccrocher" },
-                          ]}
-                        />
-                      </Field>
-                      <Field label="Poste destination">
-                        <TextInput name="destinationPost" placeholder="101" required inputMode="numeric" />
-                      </Field>
-                      <div className="flex flex-col justify-end gap-3">
-                        <Checkbox name="isActive" defaultChecked label="Intention active" />
-                      </div>
-
-                      <div className="md:col-span-2 xl:col-span-3">
-                        <SaveButton label="Ajouter l’intention" />
-                      </div>
+                      <Field label="Nouvelle intent"><TextInput name="label" required /></Field>
+                      <Field label="Route liée"><Select name="routeRuleId" options={routeOptions} /></Field>
+                      <Field label="Mots-clés"><TextInput name="keywords" required /></Field>
+                      <Field label="Priorité"><TextInput name="priority" type="number" defaultValue="100" required /></Field>
+                      <Field label="Réponse"><TextArea name="response" rows={4} required /></Field>
+                      <Field label="Action finale"><TextInput name="finalAction" defaultValue="transfer" required /></Field>
+                      <Field label="Poste destination"><TextInput name="destinationPost" defaultValue="105" required /></Field>
+                      <div className="xl:col-span-2"><Checkbox name="isActive" defaultChecked label="Intent active" /></div>
+                      <div className="xl:col-span-2"><SaveButton label="Ajouter l’intent" /></div>
                     </form>
                   </div>
-                </div>
+                ) : null}
               </div>
-
-              <form action={deleteFlowAction} className="mt-6">
-                <input type="hidden" name="id" value={flow.id} />
-                <DeleteButton />
-              </form>
-            </Section>
-          ))}
-        </div>
+            ))}
+          </div>
+        </Section>
       </div>
     </AdminShell>
   );

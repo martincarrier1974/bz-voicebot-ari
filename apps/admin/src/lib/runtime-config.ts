@@ -1,15 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
+import { getRuntimeConfigPathForTenant } from "@/lib/tenant";
 import type { PublishedVoicebotConfig } from "@/types/voicebot-runtime";
-
-type PromptRecord = Awaited<ReturnType<typeof prisma.prompt.findMany>>[number];
-type SettingRecord = Awaited<ReturnType<typeof prisma.setting.findMany>>[number];
-type RouteRecord = Awaited<ReturnType<typeof prisma.routeRule.findMany>>[number];
-type DirectoryContactRecord = Awaited<ReturnType<typeof prisma.directoryContact.findMany>>[number];
-type BookingServiceRecord = Awaited<ReturnType<typeof prisma.bookingService.findMany>>[number];
-type CalendarConnectionRecord = Awaited<ReturnType<typeof prisma.calendarConnection.findMany>>[number];
-type CalendarResourceRecord = Awaited<ReturnType<typeof prisma.calendarResource.findMany>>[number];
 
 function normalizeKeywords(value: string) {
   return value
@@ -26,7 +19,7 @@ function normalizeName(value: string | null | undefined) {
     .trim();
 }
 
-function sortFlowsForRuntime<T extends { name: string; destinationPost: string; updatedAt?: Date | string }>(flows: T[]) {
+function sortFlowsForRuntime<T extends { name: string; destinationPost: string }>(flows: T[]) {
   return [...flows].sort((a, b) => {
     const aName = normalizeName(a.name);
     const bName = normalizeName(b.name);
@@ -43,14 +36,23 @@ function sortFlowsForRuntime<T extends { name: string; destinationPost: string; 
   });
 }
 
-export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
+async function getSettingValue(tenantId: string, key: string) {
+  return prisma.setting.findFirst({ where: { tenantId, key } });
+}
+
+export async function buildRuntimeConfig(tenantId: string): Promise<PublishedVoicebotConfig> {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) {
+    throw new Error("Client introuvable pour publication runtime.");
+  }
+
   const [prompts, contexts, routes, settings, flows, directoryContacts, bookingServices, calendarConnections, calendarResources] = await Promise.all([
-    prisma.prompt.findMany({ where: { isActive: true }, orderBy: { scenario: "asc" } }),
-    prisma.context.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    prisma.routeRule.findMany({ where: { isActive: true }, orderBy: { priority: "asc" } }),
-    prisma.setting.findMany(),
+    prisma.prompt.findMany({ where: { tenantId, isActive: true }, orderBy: { scenario: "asc" } }),
+    prisma.context.findMany({ where: { tenantId, isActive: true }, orderBy: { name: "asc" } }),
+    prisma.routeRule.findMany({ where: { tenantId, isActive: true }, orderBy: { priority: "asc" } }),
+    prisma.setting.findMany({ where: { tenantId } }),
     prisma.flow.findMany({
-      where: { isActive: true },
+      where: { tenantId, isActive: true },
       include: {
         context: true,
         intents: {
@@ -61,11 +63,11 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
       },
       orderBy: { updatedAt: "desc" },
     }),
-    prisma.directoryContact.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    prisma.bookingService.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
-    prisma.calendarConnection.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.directoryContact.findMany({ where: { tenantId, isActive: true }, orderBy: { name: "asc" } }),
+    prisma.bookingService.findMany({ where: { tenantId, isActive: true }, orderBy: { name: "asc" } }),
+    prisma.calendarConnection.findMany({ where: { tenantId, isActive: true }, orderBy: { name: "asc" } }),
     prisma.calendarResource.findMany({
-      where: { isActive: true },
+      where: { tenantId, isActive: true },
       include: {
         connection: true,
         services: {
@@ -78,23 +80,22 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
     }),
   ]);
 
-  const orderedFlows = sortFlowsForRuntime<(typeof flows)[number]>(flows);
-
+  const orderedFlows = sortFlowsForRuntime(flows);
   const settingsMap = Object.fromEntries(
     settings
-      .filter((setting: SettingRecord) => !setting.key.startsWith("runtime_"))
-      .map((setting: SettingRecord) => [setting.key, setting.value]),
+      .filter((setting) => !setting.key.startsWith("runtime_"))
+      .map((setting) => [setting.key, setting.value]),
   );
-  const promptMap = Object.fromEntries(prompts.map((prompt: PromptRecord) => [prompt.scenario, prompt.content]));
+  const promptMap = Object.fromEntries(prompts.map((prompt) => [prompt.scenario, prompt.content]));
   const primaryFlow = orderedFlows[0] ?? null;
   const primaryContext = primaryFlow?.context ?? contexts[0] ?? null;
 
   return {
     version: 1,
     generatedAt: new Date().toISOString(),
-    companyName: settingsMap.company_name ?? "BZ Telecom",
+    companyName: settingsMap.company_name ?? tenant.name,
     prompts: {
-      main: prompts.find((prompt: PromptRecord) => prompt.key === "main_agent_prompt")?.content ?? "",
+      main: prompts.find((prompt) => prompt.key === "main_agent_prompt")?.content ?? "",
       greeting: promptMap.accueil ?? promptMap.greeting ?? primaryFlow?.welcomeMessage ?? "",
       silence: promptMap.silence ?? primaryFlow?.silencePrompt ?? "",
       clarification: promptMap.clarification ?? primaryFlow?.ambiguousPrompt ?? "",
@@ -115,13 +116,13 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
           responseExamples: primaryContext.responseExamples,
         }
       : null,
-    routes: routes.map((route: RouteRecord) => ({
+    routes: routes.map((route) => ({
       serviceName: route.serviceName,
       extension: route.extension,
       priority: route.priority,
       keywords: normalizeKeywords(route.keywords),
     })),
-    flows: orderedFlows.map((flow: (typeof flows)[number]) => ({
+    flows: orderedFlows.map((flow) => ({
       name: flow.name,
       welcomeMessage: flow.welcomeMessage,
       silencePrompt: flow.silencePrompt,
@@ -132,7 +133,7 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
       destinationPost: flow.destinationPost,
       maxFailedAttempts: flow.maxFailedAttempts,
       contextName: flow.context?.name ?? null,
-      intents: flow.intents.map((intent: (typeof flow.intents)[number]) => ({
+      intents: flow.intents.map((intent) => ({
         label: intent.label,
         keywords: normalizeKeywords(intent.keywords),
         response: intent.response,
@@ -142,14 +143,14 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
         routeServiceName: intent.routeRule?.serviceName ?? null,
       })),
     })),
-    directoryContacts: directoryContacts.map((contact: DirectoryContactRecord) => ({
+    directoryContacts: directoryContacts.map((contact) => ({
       extension: contact.extension,
       name: contact.name,
       aliases: normalizeKeywords(contact.aliases),
       voicemail: contact.voicemail,
       tech: contact.tech,
     })),
-    bookingServices: bookingServices.map((service: BookingServiceRecord) => ({
+    bookingServices: bookingServices.map((service) => ({
       name: service.name,
       slug: service.slug,
       description: service.description,
@@ -157,10 +158,10 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
       bufferBeforeMin: service.bufferBeforeMin,
       bufferAfterMin: service.bufferAfterMin,
     })),
-    calendarConnections: calendarConnections.map((connection: CalendarConnectionRecord) => ({
+    calendarConnections: calendarConnections.map((connection) => ({
       name: connection.name,
       provider: connection.provider,
-      tenantId: connection.tenantId,
+      tenantId: connection.tenantExternalId,
       clientId: connection.clientId,
       clientSecret: connection.clientSecret,
       refreshToken: connection.refreshToken,
@@ -168,13 +169,7 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
       defaultCalendarId: connection.defaultCalendarId,
       timezone: connection.timezone,
     })),
-    calendarResources: calendarResources.map((resource: CalendarResourceRecord & {
-      connection: CalendarConnectionRecord;
-      services: Array<{
-        priority: number;
-        bookingService: BookingServiceRecord;
-      }>;
-    }) => ({
+    calendarResources: calendarResources.map((resource) => ({
       name: resource.name,
       employeeName: resource.employeeName,
       calendarId: resource.calendarId,
@@ -192,39 +187,35 @@ export async function buildRuntimeConfig(): Promise<PublishedVoicebotConfig> {
   };
 }
 
-export async function publishRuntimeConfig() {
-  const config = await buildRuntimeConfig();
-  const runtimeDir = path.resolve(process.cwd(), "..", "..", "runtime");
-  const runtimePath = path.join(runtimeDir, "voicebot-config.json");
+export async function publishRuntimeConfig(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) {
+    throw new Error("Client introuvable pour publication runtime.");
+  }
+
+  const config = await buildRuntimeConfig(tenantId);
+  const runtimeRelativePath = getRuntimeConfigPathForTenant(tenant);
+  const runtimePath = path.resolve(process.cwd(), "..", "..", runtimeRelativePath);
+  const runtimeDir = path.dirname(runtimePath);
 
   await mkdir(runtimeDir, { recursive: true });
   await writeFile(runtimePath, JSON.stringify(config, null, 2), "utf8");
 
-  await prisma.setting.upsert({
-    where: { key: "runtime_last_published_at" },
-    update: {
-      label: "Dernière publication runtime",
-      value: config.generatedAt,
-    },
-    create: {
-      key: "runtime_last_published_at",
-      label: "Dernière publication runtime",
-      value: config.generatedAt,
-    },
-  });
+  for (const [key, label, value] of [
+    ["runtime_last_published_at", "Dernière publication runtime", config.generatedAt],
+    ["runtime_last_published_path", "Chemin runtime publié", runtimePath],
+  ] as const) {
+    const existing = await getSettingValue(tenantId, key);
+    if (existing) {
+      await prisma.setting.update({ where: { id: existing.id }, data: { label, value } });
+    } else {
+      await prisma.setting.create({ data: { tenantId, key, label, value } });
+    }
+  }
 
-  await prisma.setting.upsert({
-    where: { key: "runtime_last_published_path" },
-    update: {
-      label: "Chemin runtime publié",
-      value: runtimePath,
-    },
-    create: {
-      key: "runtime_last_published_path",
-      label: "Chemin runtime publié",
-      value: runtimePath,
-    },
-  });
+  if (!tenant.runtimeConfigPath || tenant.runtimeConfigPath !== runtimeRelativePath) {
+    await prisma.tenant.update({ where: { id: tenant.id }, data: { runtimeConfigPath: runtimeRelativePath } });
+  }
 
   return { runtimePath, generatedAt: config.generatedAt };
 }

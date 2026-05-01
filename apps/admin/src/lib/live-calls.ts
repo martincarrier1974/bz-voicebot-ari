@@ -1,13 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { LiveCallsSnapshot } from "@/types/voicebot-runtime";
+import { getLiveCallsPathForTenant } from "@/lib/tenant";
 
-function getLiveCallsPath() {
-  return path.resolve(process.cwd(), "..", "..", "runtime", "live-calls.json");
+function resolveLiveCallsPath(runtimeRelativePath?: string | null) {
+  const relativePath = runtimeRelativePath || "runtime/live-calls.json";
+  return path.resolve(process.cwd(), "..", "..", relativePath);
 }
 
-export function readLiveCallsSnapshot(): LiveCallsSnapshot {
-  const liveCallsPath = getLiveCallsPath();
+export function readLiveCallsSnapshot(tenant?: { slug: string; runtimeConfigPath?: string | null } | null): LiveCallsSnapshot {
+  const liveCallsPath = resolveLiveCallsPath(tenant ? getLiveCallsPathForTenant(tenant) : undefined);
 
   if (!existsSync(liveCallsPath)) {
     return {
