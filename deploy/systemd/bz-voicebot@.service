@@ -1,0 +1,15 @@
+[Unit]
+Description=BZ Voicebot runtime (%i)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/bz-voicebot-ari
+EnvironmentFile=/opt/bz-voicebot-ari/deploy/env/%i.env
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

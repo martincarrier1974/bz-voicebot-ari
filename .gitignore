@@ -29,3 +29,9 @@ apps/admin/.env*
 apps/admin/dev.db
 runtime/voicebot-config.json
 runtime/live-calls.json
+# Runtime multi-tenant artifacts
+runtime/tenants/
+deploy/env/*.env
+apps/admin/*.bak*
+apps/admin/prisma/dev.db
+apps/admin/prisma/prod.db

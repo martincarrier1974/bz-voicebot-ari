@@ -51,3 +51,26 @@ Résultat attendu :
 ```bash
 runtime/tenants/clinique-alpha/voicebot-config.json
 ```
+
+
+## Option systemd (recommandée sur ce serveur)
+
+Le serveur actuel utilise déjà `systemd` et **PM2 n'est pas installé**.
+
+Template fourni dans le repo :
+
+- `deploy/systemd/bz-voicebot@.service`
+
+Exemple d'installation pour `bz-telecom` :
+
+```bash
+cp deploy/systemd/bz-voicebot@.service /etc/systemd/system/bz-voicebot@.service
+systemctl daemon-reload
+systemctl enable bz-voicebot@bz-telecom
+systemctl start bz-voicebot@bz-telecom
+systemctl status bz-voicebot@bz-telecom
+```
+
+Le service lira automatiquement :
+
+- `deploy/env/bz-telecom.env`
