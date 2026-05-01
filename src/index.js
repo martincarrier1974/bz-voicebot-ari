@@ -9,16 +9,16 @@ process.on("unhandledRejection", (e) => {
 
 process.on("uncaughtException", (e) => {
   log.error({ err: e }, "uncaughtException");
-  // Ne pas crasher: loguer et continuer (évite arrêt du process sur une erreur isolée)
 });
 
-// Résumé au démarrage (pour partager les logs et diagnostiquer)
 const rtpTarget = `${env.MEDIA_SERVER_IP ?? env.ASTERISK_PUBLIC_IP}:${env.RTP_LISTEN_PORT}`;
 log.info(
   {
     ARI_URL: env.ARI_URL,
     RTP_target: rtpTarget,
     RTP_LISTEN_PORT: env.RTP_LISTEN_PORT,
+    RUNTIME_TENANT: env.RUNTIME_TENANT ?? "(default)",
+    RUNTIME_CONFIG_PATH: env.RUNTIME_CONFIG_PATH,
     DEEPGRAM: !!env.DEEPGRAM_API_KEY,
     ELEVENLABS: !!(env.ELEVENLABS_API_KEY && env.ELEVENLABS_VOICE_ID),
     ELEVENLABS_VOICE_ID: env.ELEVENLABS_VOICE_ID ?? "(non configuré)",

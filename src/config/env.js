@@ -1,5 +1,18 @@
 import "dotenv/config";
+import path from "node:path";
 import { z } from "zod";
+
+function deriveRuntimeConfigPath(input) {
+  const explicitPath = input.RUNTIME_CONFIG_PATH?.trim();
+  if (explicitPath) return explicitPath;
+
+  const tenantSlug = input.RUNTIME_TENANT?.trim();
+  if (tenantSlug) {
+    return path.posix.join("runtime", "tenants", tenantSlug, "voicebot-config.json");
+  }
+
+  return "runtime/voicebot-config.json";
+}
 
 const schema = z.object({
   ARI_URL: z.string().default("http://127.0.0.1:8088"),
@@ -10,7 +23,6 @@ const schema = z.object({
   RTP_LISTEN_IP: z.string().default("0.0.0.0"),
   RTP_LISTEN_PORT: z.coerce.number().default(40000),
   ASTERISK_PUBLIC_IP: z.string().default("127.0.0.1"),
-  /** IP:port pour external_host (si absent, utilise ASTERISK_PUBLIC_IP) */
   MEDIA_SERVER_IP: z.string().optional(),
   RTP_FORMAT: z.string().default("ulaw"),
   SAMPLE_RATE: z.coerce.number().default(8000),
@@ -24,20 +36,15 @@ const schema = z.object({
   ELEVENLABS_VOICE_ID: z.string().optional(),
   ELEVENLABS_LANGUAGE: z.string().default("multi"),
 
-  /** Utiliser l'agent conversationnel Deepgram (STT + LLM + TTS) au lieu de STT + règles + TTS */
   USE_DEEPGRAM_AGENT: z.coerce.boolean().default(false),
-  /** Clé API OpenAI pour l'agent (think provider) */
   OPENAI_API_KEY: z.string().optional(),
-  /** Modèle LLM pour l'agent (ex: gpt-4o-mini, gpt-4o) */
   DG_AGENT_LLM_MODEL: z.string().default("gpt-4o-mini"),
-  /** Message de bienvenue de l'agent (parlé au démarrage) */
   DG_AGENT_GREETING: z.string().default("Bienvenue chez BZ Telecom, comment pouvons-nous vous aider aujourd'hui ?"),
-  /** Prompt système de l'agent (comportement, ton). Limité à 25000 caractères. */
   DG_AGENT_PROMPT: z.string().optional(),
-  /** Fichier JSON publié par l'admin et lu par le voicebot */
-  RUNTIME_CONFIG_PATH: z.string().default("runtime/voicebot-config.json"),
 
-  /** Endpoints ARI pour transfert (ex: Local/101@from-internal ou PJSIP/101) */
+  RUNTIME_TENANT: z.string().optional(),
+  RUNTIME_CONFIG_PATH: z.string().optional(),
+
   TRANSFER_POSTE_101: z.string().optional(),
   TRANSFER_POSTE_102: z.string().optional(),
   TRANSFER_POSTE_105: z.string().optional(),
@@ -56,9 +63,12 @@ const schema = z.object({
   APPT_BUFFER_MIN: z.coerce.number().default(15),
 
   VOICE_AI_API_KEY: z.string().optional(),
-
-  /** Son/tone joué à la prise d'appel (ex: sound:beep, tone:ring;tonezone=fr) */
   WELCOME_TONE: z.string().optional(),
 });
 
-export const env = schema.parse(process.env);
+const parsed = schema.parse(process.env);
+
+export const env = {
+  ...parsed,
+  RUNTIME_CONFIG_PATH: deriveRuntimeConfigPath(parsed),
+};
