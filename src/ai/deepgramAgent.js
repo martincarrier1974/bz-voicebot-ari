@@ -232,6 +232,8 @@ function buildPromptFromRuntime(runtimeConfig, routes) {
   const primaryFlow = getPrimaryFlow(runtimeConfig);
   const fallbackRoute = getFallbackRoute(runtimeConfig, routes);
   const maxFailedAttempts = primaryFlow?.maxFailedAttempts ?? 2;
+  const bookingServices = Array.isArray(runtimeConfig?.bookingServices) ? runtimeConfig.bookingServices : [];
+  const todayIso = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const routeLines = routes.filter((route) => route.priority < 500).map((route) => {
     const keywords = Array.isArray(route.keywords) && route.keywords.length > 0
       ? ` Mots-clés fréquents : ${route.keywords.join(", ")}.`
@@ -271,6 +273,9 @@ function buildPromptFromRuntime(runtimeConfig, routes) {
     "Quand un prénom ou un nom correspond clairement à une seule personne de l'annuaire, transfère vers cette personne sans redemander la raison de l'appel.",
     "Ne répète jamais la question d'accueil après une réponse du client. Après une réponse du client, soit tu transfères, soit tu poses une courte question de clarification différente.",
     intentLines.length > 0 ? `Intentions configurées :\n${intentLines.join("\n")}` : "",
+    bookingServices.length > 0 ? `Services réservables disponibles : ${bookingServices.map((service) => `${service.name} (slug: ${service.slug}, durée: ${service.durationMin} min)`).join("; ")}.` : "",
+    bookingServices.length > 0 ? `Date d'aujourd'hui (référence absolue) : ${todayIso} en fuseau America/Toronto.` : "",
+    bookingServices.length > 0 ? "Si le client veut prendre un rendez-vous, commence par utiliser la fonction consulter_disponibilites avec le service et, si besoin, l'employé demandé. Convertis toujours les dates parlées comme '2 mai' ou 'vendredi prochain' vers une vraie date future au format YYYY-MM-DD dans l'année courante ou la prochaine si nécessaire. N'utilise jamais une année passée pour un rendez-vous. Quand le client choisit une heure, utilise creer_rendez_vous avec le service, la date, l'heure et son nom/téléphone si connus." : "",
     runtimeConfig?.prompts?.main ? `Directives supplémentaires : ${runtimeConfig.prompts.main}` : "",
     "Style de conversation : parle comme une bonne réceptionniste québécoise au téléphone, avec des phrases courtes, naturelles, professionnelles et faciles à comprendre.",
     "Utilise un français québécois naturel. Évite les formulations trop soutenues comme \"comment puis-je vous assister aujourd'hui\" et préfère \"qu'est-ce que je peux faire pour vous\".",
@@ -299,6 +304,8 @@ export class DeepgramAgent {
   constructor(onAgentAudio, options = {}) {
     this.onAgentAudio = onAgentAudio;
     this.onTransfer = options.onTransfer ?? null;
+    this.onCheckAvailability = options.onCheckAvailability ?? null;
+    this.onCreateBooking = options.onCreateBooking ?? null;
     this.onEvent = typeof options.onEvent === "function" ? options.onEvent : null;
     this.runtimeConfig = options.runtimeConfig ?? null;
     this._routes = Array.isArray(options.routes) && options.routes.length > 0 ? options.routes : getRoutesFromRuntimeConfig(this.runtimeConfig);
@@ -469,6 +476,38 @@ export class DeepgramAgent {
                 required: ["poste"],
               },
             },
+            {
+              name: "consulter_disponibilites",
+              description: "Consulter les disponibilités de rendez-vous pour un service et éventuellement un employé.",
+              parameters: {
+                type: "object",
+                properties: {
+                  serviceSlug: { type: "string", description: "Slug du service, par exemple coupe ou permanante." },
+                  service: { type: "string", description: "Nom ou slug du service si le slug exact n'est pas certain." },
+                  employeeName: { type: "string", description: "Nom de l'employé si le client en demande un." },
+                  date: { type: "string", description: "Date au format YYYY-MM-DD." }
+                },
+                required: [],
+              },
+            },
+            {
+              name: "creer_rendez_vous",
+              description: "Créer un rendez-vous Google Calendar pour un service à une date et une heure précises.",
+              parameters: {
+                type: "object",
+                properties: {
+                  serviceSlug: { type: "string", description: "Slug du service, par exemple coupe ou permanante." },
+                  service: { type: "string", description: "Nom ou slug du service si le slug exact n'est pas certain." },
+                  employeeName: { type: "string", description: "Nom de l'employé si pertinent." },
+                  date: { type: "string", description: "Date au format YYYY-MM-DD." },
+                  time: { type: "string", description: "Heure locale au format HH:MM, par exemple 15:30." },
+                  customerName: { type: "string", description: "Nom du client." },
+                  customerPhone: { type: "string", description: "Téléphone du client." },
+                  notes: { type: "string", description: "Notes utiles pour le rendez-vous." }
+                },
+                required: ["date", "time"],
+              },
+            },
           ],
         },
         greeting: this.agentGreeting ?? env.DG_AGENT_GREETING ?? "Bienvenue chez BZ Telecom, comment pouvons-nous vous aider aujourd'hui ?",
@@ -629,9 +668,19 @@ export class DeepgramAgent {
             continue;
           }
           this._queueTransfer({ poste, reason: "function_call", fnId: fn.id, fnName: fn.name });
+        } else if (typeof fn.name === "string" && fn.name.toLowerCase() === "consulter_disponibilites" && this.onCheckAvailability) {
+          const args = typeof fn.arguments === "string" ? JSON.parse(fn.arguments || "{}") : (fn.arguments || {});
+          Promise.resolve(this.onCheckAvailability(args))
+            .then((content) => this._sendFunctionCallResponse(fn.id, fn.name, content))
+            .catch((err) => this._sendFunctionCallResponse(fn.id, fn.name, `Erreur: ${err?.message ?? "disponibilités impossibles"}.`));
+        } else if (typeof fn.name === "string" && fn.name.toLowerCase() === "creer_rendez_vous" && this.onCreateBooking) {
+          const args = typeof fn.arguments === "string" ? JSON.parse(fn.arguments || "{}") : (fn.arguments || {});
+          Promise.resolve(this.onCreateBooking(args))
+            .then((content) => this._sendFunctionCallResponse(fn.id, fn.name, content))
+            .catch((err) => this._sendFunctionCallResponse(fn.id, fn.name, `Erreur: ${err?.message ?? "création du rendez-vous impossible"}.`));
         } else {
           log.warn(
-            { function_name: fn.name, client_side: fn.client_side, has_on_transfer: Boolean(this.onTransfer) },
+            { function_name: fn.name, client_side: fn.client_side, has_on_transfer: Boolean(this.onTransfer), has_on_check_availability: Boolean(this.onCheckAvailability), has_on_create_booking: Boolean(this.onCreateBooking) },
             "FunctionCallRequest ignoré"
           );
         }

@@ -46,6 +46,10 @@ const schema = z.object({
   M365_CLIENT_ID: z.string().optional(),
   M365_CLIENT_SECRET: z.string().optional(),
 
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REFRESH_TOKEN: z.string().optional(),
+
   CAL_SUPPORT: z.string().email().optional(),
   CAL_SALES: z.string().email().optional(),
   CAL_CABLING: z.string().email().optional(),

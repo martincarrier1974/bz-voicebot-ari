@@ -12,6 +12,7 @@
     "lint:admin": "npm --prefix apps/admin run lint",
     "format": "prettier -w .",
     "test:deepgram": "node scripts/test-deepgram.js",
+    "test:google": "node scripts/test-google-availability.js",
     "admin:dev": "npm --prefix apps/admin run dev",
     "admin:build": "npm --prefix apps/admin run build",
     "admin:start": "npm --prefix apps/admin run start",

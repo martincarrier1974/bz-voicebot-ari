@@ -3,6 +3,8 @@ import { env } from "../config/env.js";
 import { createInitialCallRuntimeState } from "../runtime/callRuntime.js";
 import { removeLiveCall, upsertLiveCall } from "../runtime/liveCallsRegistry.js";
 import { log } from "../utils/logger.js";
+import { suggestGoogleSlots, resolveBookingTargets } from "../calendar/booking.js";
+import { createEvent } from "../calendar/google.js";
 import { DeepgramAgent } from "./deepgramAgent.js";
 
 /** Routes de transfert configurables. */
@@ -106,6 +108,78 @@ function getRouteMatchScore(route, text) {
 
 function getPrimaryFlow(runtimeConfig) {
   return Array.isArray(runtimeConfig?.flows) && runtimeConfig.flows.length > 0 ? runtimeConfig.flows[0] : null;
+}
+
+
+function getBookingServices(runtimeConfig) {
+  return Array.isArray(runtimeConfig?.bookingServices) ? runtimeConfig.bookingServices : [];
+}
+
+function normalizeBookingToken(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function resolveServiceSlug(runtimeConfig, input) {
+  const services = getBookingServices(runtimeConfig);
+  const needle = normalizeBookingToken(input);
+  if (!needle) return null;
+  const exact = services.find((service) => normalizeBookingToken(service.slug) === needle);
+  if (exact) return exact.slug;
+  const byName = services.find((service) => normalizeBookingToken(service.name) === needle || normalizeBookingToken(service.name).includes(needle));
+  return byName?.slug ?? null;
+}
+
+function formatSlotTime(date, timeZone = "America/Toronto") {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date(date));
+  const hour = parts.find((part) => part.type === "hour")?.value ?? "00";
+  const minute = parts.find((part) => part.type === "minute")?.value ?? "00";
+  return `${hour}:${minute}`;
+}
+
+function formatSlotDate(date, timeZone = "America/Toronto") {
+  return new Intl.DateTimeFormat("fr-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(date));
+}
+
+function parseRequestedDay(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return new Date();
+
+  const isoDateOnly = /^((\d{4})-(\d{2})-(\d{2}))$/.exec(raw);
+  if (isoDateOnly) {
+    const year = Number(isoDateOnly[2]);
+    const month = Number(isoDateOnly[3]);
+    const day = Number(isoDateOnly[4]);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    if (year < currentYear) {
+      let candidate = new Date(`${currentYear}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00`);
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (candidate < todayStart) {
+        candidate = new Date(`${currentYear + 1}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00`);
+      }
+      log.warn({ raw, correctedTo: candidate.toISOString() }, "Booking date auto-corrected to upcoming year");
+      return candidate;
+    }
+
+    return new Date(`${raw}T00:00:00`);
+  }
+
+  return new Date(raw);
 }
 
 /**
@@ -288,6 +362,109 @@ export class VoiceAgentPipeline {
     }
   }
 
+  async _checkAvailability(args = {}) {
+    const serviceSlug = resolveServiceSlug(this._runtimeConfig, args.serviceSlug || args.service || args.prestation || args.typeService);
+    if (!serviceSlug) {
+      const available = getBookingServices(this._runtimeConfig).map((service) => `${service.name} (${service.slug})`).join(", ");
+      return `Service introuvable. Services disponibles: ${available || "aucun"}.`;
+    }
+
+    const day = parseRequestedDay(args.date || args.day);
+    if (Number.isNaN(day.getTime())) {
+      return "Date invalide. Utilise le format YYYY-MM-DD.";
+    }
+
+    const result = await suggestGoogleSlots({
+      runtimeConfig: this._runtimeConfig,
+      serviceSlug,
+      preferredEmployeeName: args.employeeName || args.employee || args.employe || null,
+      day,
+    });
+
+    if (!result?.service) {
+      return `Service ${serviceSlug} introuvable.`;
+    }
+
+    const first = result.suggestions?.[0];
+    const slots = first?.slots || [];
+    if (slots.length === 0) {
+      return `Aucune disponibilité trouvée pour ${result.service.name}. Raison: ${result.reason || "indisponible"}.`;
+    }
+
+    const timeZone = "America/Toronto";
+    const dateLabel = formatSlotDate(slots[0].start, timeZone);
+    const times = slots.map((slot) => formatSlotTime(slot.start, timeZone));
+    const employeeName = first.employeeName || first.resourceName;
+    return `Disponibilités pour ${result.service.name} le ${dateLabel} avec ${employeeName}: ${times.join(", ")}. Pour réserver, utilise creer_rendez_vous avec serviceSlug="${result.service.slug}", date="${dateLabel}" et time parmi ${times.join(", ")}.`;
+  }
+
+  async _createBooking(args = {}) {
+    const serviceSlug = resolveServiceSlug(this._runtimeConfig, args.serviceSlug || args.service || args.prestation || args.typeService);
+    if (!serviceSlug) {
+      const available = getBookingServices(this._runtimeConfig).map((service) => `${service.name} (${service.slug})`).join(", ");
+      return `Service introuvable. Services disponibles: ${available || "aucun"}.`;
+    }
+
+    const requestedTime = String(args.time || args.heure || "").trim();
+    if (!/^\d{2}:\d{2}$/.test(requestedTime)) {
+      return "Heure invalide. Utilise le format HH:MM, par exemple 15:30.";
+    }
+
+    const day = parseRequestedDay(args.date || args.day);
+    if (Number.isNaN(day.getTime())) {
+      return "Date invalide. Utilise le format YYYY-MM-DD.";
+    }
+
+    const preferredEmployeeName = args.employeeName || args.employee || args.employe || null;
+    const result = await suggestGoogleSlots({
+      runtimeConfig: this._runtimeConfig,
+      serviceSlug,
+      preferredEmployeeName,
+      day,
+      maxSlotsPerEmployee: 20,
+    });
+
+    if (!result?.service) {
+      return `Service ${serviceSlug} introuvable.`;
+    }
+
+    const first = result.suggestions?.[0];
+    const matchingSlot = (first?.slots || []).find((slot) => formatSlotTime(slot.start, "America/Toronto") == requestedTime);
+    if (!first || !matchingSlot) {
+      return `Le créneau ${requestedTime} n'est pas disponible pour ${result.service.name}.`;
+    }
+
+    const targets = resolveBookingTargets(this._runtimeConfig, serviceSlug, preferredEmployeeName);
+    const target = targets.targets.find((item) => item.calendarId === first.calendarId) || targets.targets[0];
+    if (!target?.connection) {
+      return "Connexion calendrier introuvable pour cette réservation.";
+    }
+
+    const customerName = String(args.customerName || args.nomClient || args.nom || "Client téléphone").trim();
+    const customerPhone = String(args.customerPhone || args.telephone || args.phone || "").trim();
+    const notes = String(args.notes || args.note || "").trim();
+    const description = [
+      `Réservation créée par le voicebot.`,
+      `Service: ${result.service.name}`,
+      customerName ? `Client: ${customerName}` : "",
+      customerPhone ? `Téléphone: ${customerPhone}` : "",
+      notes ? `Notes: ${notes}` : "",
+    ].filter(Boolean).join("\n");
+
+    const event = await createEvent({
+      connection: target.connection,
+      calendarId: first.calendarId,
+      summary: `${result.service.name} - ${customerName}`,
+      description,
+      startISO: matchingSlot.start,
+      endISO: matchingSlot.end,
+      timeZone: target.resource.timezone || target.connection.timezone || "America/Toronto",
+    });
+
+    const dateLabel = formatSlotDate(matchingSlot.start, "America/Toronto");
+    return `Rendez-vous confirmé pour ${result.service.name} le ${dateLabel} à ${requestedTime}. ID événement: ${event.id}.`;
+  }
+
   _handleAgentEvent(event) {
     if (!event || typeof event !== "object") return;
 
@@ -335,12 +512,16 @@ export class VoiceAgentPipeline {
     const onTransfer = this._channelId && this._ariBase && this._ariAuth
       ? (poste) => this._doTransfer(poste)
       : null;
+    const onCheckAvailability = (args) => this._checkAvailability(args);
+    const onCreateBooking = (args) => this._createBooking(args);
     this.agent = new DeepgramAgent(
       (audioMulaw) => {
         this.rtpServer.sendUlawStream(audioMulaw);
       },
       {
         onTransfer: onTransfer ?? undefined,
+        onCheckAvailability,
+        onCreateBooking,
         runtimeConfig: this._runtimeConfig,
         routes: this._routes,
         onEvent: (event) => this._handleAgentEvent(event),
